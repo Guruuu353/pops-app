@@ -5,12 +5,11 @@ services:
     environment:
       POPS_ADMIN_EMAIL: ${POPS_ADMIN_EMAIL:-admin@patteconservation.com}
       POPS_ADMIN_PASSWORD: ${POPS_ADMIN_PASSWORD:-}
-    volumes: [pops-data:/data]
-    expose: ["8080"]
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports: ["80:80", "443:443"]
-    volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro, caddy-data:/data]
-    depends_on: [pops]
-volumes: { pops-data: {}, caddy-data: {} }
+    volumes:
+      - pops-data:/data
+    ports:
+      - "127.0.0.1:8086:8080"
+
+volumes:
+  pops-data: {}
+
