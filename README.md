@@ -45,3 +45,4 @@ Figure 1 / KML of the zones, the remaining log pages, the default ranger, and th
 - Step 3 (Check) has an "Images for this row" column: add a photo or scan to one specific patrol or incident, or pick a page already uploaded in the batch.
 - The "Scanned pages of the whole batch" card attaches its files to every imported row. Use it only for a sheet that covers all rows.
 - Images can still be added or removed later on each record.
+- Import has two ways to enter rows: **Type in a table** (one box per paper column, blanks allowed, so nothing shifts) and **Paste from Excel**. After pasting, "Move into the table to fix blanks" puts the rows in the table so you can correct them.

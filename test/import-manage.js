@@ -1,6 +1,6 @@
 const fs=require('fs');const { start, browser, login } = require('./harness');
 (async()=>{const S=await start();const B=await browser();const a=await B.open(S.base,{viewport:{width:1440,height:900}});a.page.on('pageerror',e=>console.log('STACK',String(e.stack).split('\n').slice(0,4).join(' | ')));await login(a.page,S.base,'admin@test.org','Admin2026pw');
-await a.page.goto(S.base+'/#import');await a.page.waitForSelector('#imp-txt');
+await a.page.goto(S.base+'/#import');await a.page.waitForSelector('button:has-text("Paste from Excel")');await a.page.click('button:has-text("Paste from Excel")');await a.page.waitForSelector('#imp-txt');
 for(const [btn,f] of [['Daily Patrol Log','daily-patrol-log_pages-1-5-9'],['Entry Log','entry-log_page-11']]){await a.page.click('button:has-text("'+btn+'")');await a.page.fill('#imp-txt',fs.readFileSync('docs/import-samples/'+f+'.tsv','utf8'));await a.page.waitForTimeout(400);await a.page.click('#imp-go');await a.page.waitForTimeout(1200);}
 for(const [h,tabs] of [['patrols',['Summary','Timeline','Forms']],['incidents',[]]]){
  await a.page.goto(S.base+'/#'+h);await a.page.waitForTimeout(1200);await a.page.click('table.tbl tbody tr');await a.page.waitForTimeout(800);

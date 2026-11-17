@@ -11,7 +11,7 @@ await S.call('PUT','/docs/patrols/PT-PH',{data:{id:'PT-PH',iso:'2026-11-17',date
 const pd=(await S.call('GET','/docs',null,S.adminToken)).docs.patrols.find(p=>p.id==='PT-PH');ck('photo inside a patrol is moved out of the database',/^\/api\/files\//.test(pd.photos[0].url),JSON.stringify(pd.photos).slice(0,120));
 // UI: import with a scan
 const A=await B.open(S.base,{viewport:{width:1440,height:500}});await login(A.page,S.base,'admin@test.org','Admin2026pw');
-await A.page.goto(S.base+'/#import');await A.page.waitForSelector('#imp-txt');
+await A.page.goto(S.base+'/#import');await A.page.waitForSelector('button:has-text("Paste from Excel")');await A.page.click('button:has-text("Paste from Excel")');await A.page.waitForSelector('#imp-txt');
 await A.page.setInputFiles('#imp-scan',{name:'daily-p1.png',mimeType:'image/png',buffer:png});await A.page.waitForSelector('.scanitem img');
 await A.page.fill('#imp-txt','19/5/2025\t4:00pm\t6:30pm\tInside the closed area\tNo markers\t-\tWarning\tAli Shee');await A.page.click('#imp-go');await A.page.waitForTimeout(1500);
 const ip=(await S.call('GET','/docs',null,S.adminToken)).docs.patrols.find(p=>p.imported);ck('imported patrol carries the scan stored on the server',ip&&ip.scans&&ip.scans.length===1&&/^\/api\/files\//.test(ip.scans[0].url),JSON.stringify(ip&&ip.scans));

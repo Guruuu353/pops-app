@@ -75,7 +75,7 @@ const { start, browser, login } = require('./harness');
   await tp.click('button:has-text("New entry")'); await tp.click('button:has-text("Finance entry")'); await tp.fill('#fd', 'Fuel'); await tp.fill('#fa', '5000'); await tp.click('.modal button:has-text("Submit for approval")'); await tp.waitForTimeout(900);
   check('finance entry submitted from the same role', (await docs('fin')).length === 1 && (await docs('fin'))[0].status === 'Submitted');
   // history import: two paper rows -> one patrol, one incident
-  await ap.goto(S.base + '/#import'); await ap.waitForSelector('text=Import paper logs');
+  await ap.goto(S.base + '/#import'); await ap.waitForSelector('text=Import paper logs'); await ap.click('button:has-text("Paste from Excel")');
   await ap.fill('#imp-txt', '19/5/2025\t4:00pm\t6:30pm\tInside the closed area\tFishing in closed area\tNo markers\tWarning\tAli Shee');
   await ap.click('#imp-go');
   await ap.click('button:has-text("Entry Log")');
