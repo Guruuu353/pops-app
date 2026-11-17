@@ -498,7 +498,10 @@ if (require.main === module) {
   const port = +process.env.PORT || 8080;
   const dbFile = process.env.POPS_DB || path.join(__dirname, '..', 'data', 'pops.sqlite');
   const { server, boot } = createApp({ dbFile, webDir: path.join(__dirname, '..', 'web', 'dist'), adminEmail: process.env.POPS_ADMIN_EMAIL, adminPassword: process.env.POPS_ADMIN_PASSWORD });
-  server.listen(port, () => {
+  process.on('uncaughtException', (e) => console.error('uncaught', e));
+  process.on('unhandledRejection', (e) => console.error('unhandled', e));
+  server.keepAliveTimeout = 65000;
+  server.listen(port, '0.0.0.0', () => {
     console.log(`POps running on http://localhost:${port}`);
     if (boot.adminCreated) console.log(`\nFirst administrator created.\n  Email: ${boot.adminEmail}\n  Temporary password: ${boot.tempPassword}\n  You will be asked to change it at first sign-in.\n`);
   });

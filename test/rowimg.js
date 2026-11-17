@@ -1,0 +1,13 @@
+const sharp=require('sharp');const { start, browser, login } = require('./harness');
+(async()=>{const S=await start();const B=await browser();let bad=0;const ck=(n,v,x)=>{console.log(v?'PASS':'FAIL',n,v?'':x||'');if(!v)bad++;};
+const png=await sharp({create:{width:300,height:300,channels:3,background:{r:200,g:30,b:30}}}).png().toBuffer();
+const A=await B.open(S.base,{viewport:{width:1440,height:900}});await login(A.page,S.base,'admin@test.org','Admin2026pw');
+await A.page.goto(S.base+'/#import');await A.page.waitForSelector('#imp-txt');
+await A.page.fill('#imp-txt','19/5/2025\t4:00pm\t6:30pm\tInside the closed area\tNo markers\t-\tWarning\tAli Shee\n20/5/2025\t5:00am\t7:00am\tInside the closed area\tNo markers\t-\tWarning\tAli Shee');
+await A.page.waitForTimeout(500);const ins=await A.page.$$('input[id^="row-"]');ck('each ready row has its own image picker',ins.length===2,ins.length);
+await ins[0].setInputFiles({name:'evidence.png',mimeType:'image/png',buffer:png});await A.page.waitForTimeout(1200);
+await A.page.click('#imp-go');await A.page.waitForTimeout(1500);
+const ps=(await S.call('GET','/docs',null,S.adminToken)).docs.patrols.filter(p=>p.imported).sort((a,b)=>a.iso<b.iso?-1:1);
+ck('only the chosen row got the image',ps.length===2&&ps[0].scans.length===1&&ps[1].scans.length===0,JSON.stringify(ps.map(p=>p.scans&&p.scans.length)));
+ck('no browser errors',!A.errs.length,JSON.stringify(A.errs));
+await B.br.close();S.server.close();process.exit(bad?1:0);})().catch(e=>{console.error(e);process.exit(1);});

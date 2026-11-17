@@ -40,4 +40,8 @@ Figure 1 / KML of the zones, the remaining log pages, the default ranger, and th
 ## Patrol progress alerts
 - Admin > Field rules has three thresholds: silent too long, paused too long, patrol too long. Office users (admin, fisheries) see alerts in the bell, dashboard and Patrols page; the ranger sees a banner in the app.
 - A ranger with an open patrol is returned to it on opening the app, and cannot start a second one.
-# pops-app
+
+## Importing paper logs with images
+- Step 3 (Check) has an "Images for this row" column: add a photo or scan to one specific patrol or incident, or pick a page already uploaded in the batch.
+- The "Scanned pages of the whole batch" card attaches its files to every imported row. Use it only for a sheet that covers all rows.
+- Images can still be added or removed later on each record.

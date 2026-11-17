@@ -95,18 +95,19 @@ function importRow(sheet,raw,{defaultRanger,codeOverride}={}){
  return {issues,note,rec:{kind:'incident',key,doc:normInc({id:'IMPI-'+date.replace(/-/g,'')+'-'+hash(key),iso:date,date:dlabel(date),time:time||'',cat:'Infringement',ranger:splitNames(c(9)).map(matchRanger).join(', '),patrol:'—',desc,personsList:persons,personsUnknown:!persons.length,persons:persons.length?persons.map(p=>p.name).join(', '):'Not identified',code:code||'',action:iblank(c(7))?'—':c(7),ref:'None',stage:0,loc:LOCTXT[loc]||'',imported:true,source:'Paper: Entry Log'})}};
 }
 
+const RowImages=({id,list,pool,set})=>html`<div><${ScanList} scans=${list} onRemove=${i=>set(l=>l.filter((_,k)=>k!==i))}/><${ScanPicker} id=${'row-'+id} label=${list.length?'Add more':'Add image'} onAdd=${l=>set(x=>[...x,...l])}/>${pool.length>0&&html`<span style=${{marginLeft:6}}><${Sel} id=${'pool-'+id} value=${''} onChange=${v=>{const f=pool.find(x=>x.id===v);if(f)set(x=>x.some(y=>y.id===f.id)?x:[...x,f]);}} opts=${[['','Use a batch page…'],...pool.map(x=>[x.id,x.name])]}/></span>`}</div>`;
 const Import=()=>{
  const {patrols,setPatrols,incidents,setIncidents,log,toast}=useApp();
- const [sheet,setSheet]=useState('daily');const [txt,setTxt]=useState('');const [def,setDef]=useState('');const [ov,setOv]=useState({});const [busy,setBusy]=useState(false);const [scans,setScans]=useState([]);
+ const [sheet,setSheet]=useState('daily');const [txt,setTxt]=useState('');const [def,setDef]=useState('');const [ov,setOv]=useState({});const [busy,setBusy]=useState(false);const [scans,setScans]=useState([]);const [rs,setRs]=useState({});
  const S=SHEETS[sheet];const rows=parsePaste(txt).filter(r=>!/^date$/i.test((r[0]||'').trim()));
  const res=rows.map((r,i)=>importRow(sheet,r,{defaultRanger:def.trim(),codeOverride:ov[i]}));
  const have=new Set([...patrols.filter(p=>p.imported).map(p=>'daily|'+p.iso+'|'+p.start+'|'+(p.inLmma?'inside':'outside')),...incidents.filter(i=>i.imported).map(i=>'entry|'+i.id)]);
  const dupe=r=>r.rec&&(r.rec.kind==='patrol'?patrols:incidents).some(p=>p.id===r.rec.doc.id);
  const ok=res.filter(r=>r.rec&&!r.issues.length&&!dupe(r));const bad=res.filter(r=>!r.skip&&r.issues.length);
  const codes=(LOOK.infringements||[]).map(i=>[i.code,i.code+'. '+i.label]);
- const go=()=>{setBusy(true);const ps=ok.filter(r=>r.rec.kind==='patrol').map(r=>({...r.rec.doc,scans})),is=ok.filter(r=>r.rec.kind==='incident').map(r=>({...r.rec.doc,scans}));
+ const go=()=>{setBusy(true);const ps=ok.filter(r=>r.rec.kind==='patrol').map(r=>({...r.rec.doc,scans:[...scans,...(rs[r.rec.doc.id]||[])]})),is=ok.filter(r=>r.rec.kind==='incident').map(r=>({...r.rec.doc,scans:[...scans,...(rs[r.rec.doc.id]||[])]}));
   if(ps.length)setPatrols(x=>[...ps,...x]);if(is.length)setIncidents(x=>[...is,...x]);
-  log('Imported paper log','Reports',S.label+': '+ok.length+' rows');toast(ok.length+' rows imported');setTxt('');setOv({});setScans([]);setBusy(false);};
+  log('Imported paper log','Reports',S.label+': '+ok.length+' rows');toast(ok.length+' rows imported');setTxt('');setOv({});setScans([]);setRs({});setBusy(false);};
  return html`<div><${PageHead} title="Import paper logs" sub="Type or paste rows exactly as written on the two paper sheets. Nothing is saved until you press Import."/>
  <${Card} title="1. Choose the sheet">
   <div className="seg">${Object.entries(SHEETS).map(([k,v])=>html`<button key=${k} className=${'segb '+(sheet===k?'on':'')} onClick=${()=>{setSheet(k);setTxt('');setOv({});}}>${v.label}</button>`)}</div>
@@ -119,9 +120,9 @@ const Import=()=>{
   <div className="row" style=${{marginTop:8,gap:8}}><${Btn} kind="small" onClick=${()=>setTxt(S.example)}>Insert example row</${Btn}></div>
  </${Card}>
  ${rows.length>0&&html`<${Card} title=${'3. Check ('+ok.length+' ready, '+bad.length+' need attention)'}>
-  <div className="tablewrap"><table className="tbl"><thead><tr><th>#</th><th>Date</th><th>Result</th><th>Notes</th></tr></thead><tbody>${res.map((r,i)=>html`<tr key=${i}><td>${i+1}</td><td>${rows[i][0]}</td><td>${r.skip?html`<span className="muted">Skipped</span>`:r.issues.length?html`<span style=${{color:'var(--crit,#b3261e)'}}>${r.issues.join('; ')}</span>`:dupe(r)?'Already imported':html`<b>${r.rec.kind==='patrol'?'Patrol':'Incident'}</b>`}${sheet==='entry'&&!r.skip&&r.issues.some(x=>/code/i.test(x))&&html` <${Sel} id=${'imp-code-'+i} value=${ov[i]||''} onChange=${v=>setOv(o=>({...o,[i]:v}))} opts=${[['','Choose code'],...codes]}/>`}</td><td className="muted">${(r.note||[]).join('; ')}</td></tr>`)}</tbody></table></div>
+  <div className="tablewrap"><table className="tbl"><thead><tr><th>#</th><th>Date</th><th>Result</th><th>Notes</th><th>Images for this row</th></tr></thead><tbody>${res.map((r,i)=>html`<tr key=${i}><td>${i+1}</td><td>${rows[i][0]}</td><td>${r.skip?html`<span className="muted">Skipped</span>`:r.issues.length?html`<span style=${{color:'var(--crit,#b3261e)'}}>${r.issues.join('; ')}</span>`:dupe(r)?'Already imported':html`<b>${r.rec.kind==='patrol'?'Patrol':'Incident'}</b>`}${sheet==='entry'&&!r.skip&&r.issues.some(x=>/code/i.test(x))&&html` <${Sel} id=${'imp-code-'+i} value=${ov[i]||''} onChange=${v=>setOv(o=>({...o,[i]:v}))} opts=${[['','Choose code'],...codes]}/>`}</td><td className="muted">${(r.note||[]).join('; ')}</td><td>${r.rec&&!r.issues.length&&!dupe(r)?html`<${RowImages} id=${r.rec.doc.id} list=${rs[r.rec.doc.id]||[]} pool=${scans} set=${f=>setRs(o=>({...o,[r.rec.doc.id]:f(o[r.rec.doc.id]||[])}))}/>`:''}</td></tr>`)}</tbody></table></div>
   <div className="row" style=${{marginTop:12}}><${Btn} kind="primary" id="imp-go" disabled=${!ok.length||busy} onClick=${go}>Import ${ok.length} row${ok.length===1?'':'s'}</${Btn}></div>
  </${Card}>`}
- <${Card} title="Scanned pages of the paper log" sub="Photograph or scan the pages and add them here. They are stored on the server and attached to every row you import in this batch, as evidence. You can also add or remove scans later on each record."><${ScanList} scans=${scans} onRemove=${i=>setScans(l=>l.filter((_,k)=>k!==i))}/><div style=${{marginTop:8}}><${ScanPicker} id="imp-scan" onAdd=${l=>setScans(x=>[...x,...l])}/></div></${Card}>
+ <${Card} title="Scanned pages of the paper log" sub="Pages that apply to the WHOLE batch (for example a scanned sheet). They are attached to every row you import. For a photo that belongs to one patrol or incident only, use the Images column in step 3 instead. You can also add or remove images later on each record."><${ScanList} scans=${scans} onRemove=${i=>setScans(l=>l.filter((_,k)=>k!==i))}/><div style=${{marginTop:8}}><${ScanPicker} id="imp-scan" onAdd=${l=>setScans(x=>[...x,...l])}/></div></${Card}>
  </div>`;
 };
