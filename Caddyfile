@@ -1,0 +1,3 @@
+portal.yobbytech.com {
+	reverse_proxy pops:8080
+}

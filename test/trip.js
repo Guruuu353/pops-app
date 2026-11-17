@@ -1,0 +1,33 @@
+const { start, browser, login } = require('./harness');
+(async()=>{const S=await start();const B=await browser();let bad=0;const ck=(n,v,x)=>{console.log(v?'PASS':'FAIL',n,v?'':x||'');if(!v)bad++;};
+const put=(c,id,b)=>S.call('PUT','/docs/'+c+'/'+id,{data:b},S.adminToken);
+const d=new Date().toISOString();
+await put('fleet','Mihreen',{meta:{reg:'LU 1',cox:'User cox',type:'Fibreglass, 6 m',hp:'40 HP',trackHours:false,engine:'Outboard 40 HP',status:'In service'},engines:[{id:'E1',label:'Engine',spec:'Outboard 40 HP',serial:'',hrs:100,svcAt:100,svcDate:{$d:d},intervalH:100,intervalM:6,warnH:10,warnD:14}],svc:[]});
+const R=await B.open(S.base,{viewport:{width:390,height:844},isMobile:true,hasTouch:true,geolocation:{latitude:-2.2,longitude:41.0},permissions:['geolocation']});const rp=R.page;
+await login(rp,S.base,'ranger@test.org','Start2026','Ranger2026pw');await rp.waitForTimeout(700);
+await rp.click('button:has-text("Start a new patrol")');await rp.selectOption('#pr-vn','Mihreen');
+ck('boat type and HP filled from the boat record',(await rp.inputValue('#pr-vt'))==='Fibreglass, 6 m'&&(await rp.inputValue('#pr-vh'))==='40 HP');
+await rp.click('button:has-text("Start patrol")');await rp.waitForSelector('text=Fisher check');
+for(const [la,lo] of [[-2.2105,41.0035],[-2.2125,41.0045],[-2.2150,41.0050]]){await rp.context().setGeolocation({latitude:la,longitude:lo});await rp.waitForTimeout(500);}
+await rp.click('button.big.go:has-text("Fisher check")');await rp.fill('#ck-n','Juma Ali');await rp.click('.bgrid button.go:has-text("Save")');await rp.waitForTimeout(500);
+await rp.context().setOffline(true);await rp.waitForTimeout(600);await rp.context().setOffline(false);await rp.waitForTimeout(800);
+await rp.click('button:has-text("Pause")');await rp.click('button:has-text("Resume")');await rp.waitForTimeout(800);
+let pt=(await S.call('GET','/docs',null,S.adminToken)).docs.patrols[0];const ks=(pt.events||[]).map(e=>e.k);
+ck('events recorded: start, offline, online, pause, resume',['start','offline','online','pause','resume'].every(k=>ks.includes(k)),ks.join());
+await rp.waitForTimeout(21000);
+{const L=await B.open(S.base,{viewport:{width:1440,height:900}});await login(L.page,S.base,'admin@test.org','Admin2026pw');await L.page.goto(S.base+'/#live-map');await L.page.waitForTimeout(2500);await L.page.screenshot({path:'../shots/livemap-full.png'});console.log('ST',JSON.stringify((await S.call('GET','/docs',null,S.adminToken)).docs.patrols.map(p=>[p.status,p.boat,(p.track||[]).length,p.seen,p.leader])));console.log('MK',JSON.stringify(await L.page.$$eval('.mk',n=>n.map(x=>x.getAttribute('aria-label')))));}
+await rp.click('button:has-text("Complete patrol")');await rp.fill('#po-f','12');await rp.click('button:has-text("Save as draft")');await rp.waitForTimeout(1200);
+await rp.click('button:has-text("Records")');await rp.click('.arow.tap');await rp.waitForSelector('text=Complete patrol');await rp.click('button:has-text("Submit")');await rp.waitForTimeout(1500);
+pt=(await S.call('GET','/docs',null,S.adminToken)).docs.patrols[0];ck('patrol submitted with end time and stop event',pt.status==='Completed'&&(pt.events||[]).some(e=>e.k==='stop'),JSON.stringify(pt).slice(0,200));
+const C=await B.open(S.base,{viewport:{width:390,height:844},isMobile:true,hasTouch:true});await login(C.page,S.base,'cox@test.org','Start2026','Cox2026pw');
+await C.page.goto(S.base+'/#boats');await C.page.waitForSelector('text=Trips from patrols');
+ck('coxswain sees the patrol trip as a suggestion',true);
+await C.page.click('button:has-text("Review and add")');await C.page.waitForTimeout(500);
+ck('suggested trip is prefilled with times and fuel',(await C.page.inputValue('#vr'))==='12'&&(await C.page.inputValue('#vdp'))!==''&&(await C.page.inputValue('#va'))!=='');
+await C.page.click('button:has-text("Submit entry")');await C.page.waitForTimeout(1500);
+const v=(await S.call('GET','/docs',null,S.adminToken)).docs.vlog;ck('vessel log row linked to the patrol',v.length===1&&v[0].patrol===pt.id,JSON.stringify(v).slice(0,200));
+const A=await B.open(S.base,{viewport:{width:1440,height:900}});await login(A.page,S.base,'admin@test.org','Admin2026pw');
+await A.page.goto(S.base+'/#patrols');await A.page.waitForSelector('table.tbl tbody tr');await A.page.click('table.tbl tbody tr');await A.page.click('button:has-text("Timeline")');await A.page.waitForTimeout(600);
+const tx=await A.page.textContent('.tline');ck('admin timeline shows network lost and back',tx.includes('Network lost')&&tx.includes('Network back'),tx.slice(0,200));
+ck('no browser errors',![R,C,A].some(x=>x.errs.length),JSON.stringify([R.errs,C.errs,A.errs]));
+await B.br.close();S.server.close();process.exit(bad?1:0);})().catch(e=>{console.error(e);process.exit(1);});

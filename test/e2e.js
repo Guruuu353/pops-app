@@ -1,0 +1,93 @@
+// Real-flow browser test against the real server (no demo data). Run: node --no-warnings test/e2e.js
+const { start, browser, login } = require('./harness');
+(async () => {
+  const S = await start(); const B = await browser(); let bad = 0;
+  const check = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + (x || ''))); if (!c) bad++; };
+  const docs0 = async (coll) => (await S.call('GET', '/docs', null, S.adminToken)).docs[coll] || [];
+  const docs = async (coll, n = 1) => { for (let i = 0; i < 20; i++) { const d = await docs0(coll); if (d.length >= n) { await new Promise(r => setTimeout(r, 400)); return docs0(coll); } await new Promise(r => setTimeout(r, 300)); } return docs0(coll); };
+  const A = await B.open(S.base); const ap = A.page;
+  await login(ap, S.base, 'admin@test.org', 'Admin2026pw');
+  check('admin dashboard has no demo text', !/sample|demo|Hamisi|Mlinzi|Nguru/i.test(await ap.innerText('body')));
+  await ap.goto(S.base + '/#staff'); await ap.waitForSelector('text=Staff & Users');
+  await ap.click('button:has-text("Add user")');
+  await ap.fill('#sn', 'Amina Hassan'); await ap.fill('#se', 'amina@test.org'); await ap.selectOption('#sr', 'ranger');
+  await ap.click('button:has-text("Create account")'); await ap.waitForSelector('text=Temporary sign-in');
+  const shown = await ap.innerText('.notice .mono, .mono'); const pw = shown.split('/')[1].trim();
+  const u = (await S.call('GET', '/users', null, S.adminToken)).users.find(x => x.email === 'amina@test.org');
+  check('admin created a ranger with county and sub-county', u && u.role === 'ranger' && u.county === 'Lamu' && u.subcounty === 'Lamu East');
+  await ap.goto(S.base + '/#projects'); await ap.waitForSelector('text=Conservation Projects');
+  await ap.click('button:has-text("New project")'); await ap.fill('#pn', 'Seagrass Survey'); await ap.fill('#pp', 'Test Funder');
+  await ap.click('.modal button:has-text("Save project")'); await ap.waitForSelector('text=Assigned officers'); await ap.waitForTimeout(600);
+  check('project saved on the server', (await docs('projects')).some(p => p.name === 'Seagrass Survey'));
+  await ap.goto(S.base + '/#boats'); await ap.waitForSelector('text=Boats & Equipment');
+  await ap.click('button:has-text("Add boat")'); await ap.fill('#abn', 'Test Boat'); await ap.selectOption('#abe', '2'); check('only coxswain is picked automatically', await ap.inputValue('#abc') === 'User cox'); await ap.fill('#abv', 'Fibreglass, 6 m'); await ap.fill('#abhp', '40 HP');
+  await ap.fill('#abh1', '100'); await ap.fill('#abh2', '90'); await ap.click('.modal button:has-text("Add boat")');
+  await ap.waitForTimeout(900);
+  const tb = (await docs('fleet')).find(x => x.id === 'Test Boat');
+  check('boat saved with 2 engines and hour meters on', tb && tb.engines.length === 2 && tb.meta.trackHours === true, JSON.stringify(tb || {}).slice(0, 200));
+  // coxswain
+  const C = await B.open(S.base); const cp = C.page;
+  await login(cp, S.base, 'cox@test.org', 'Start2026', 'Pass2026word');
+  await cp.goto(S.base + '/#boats'); await cp.waitForSelector('text=Test Boat');
+  await cp.click('button:has-text("Add log entry")'); await cp.fill('#vdp', '07:00'); await cp.fill('#va', '10:00');
+  await cp.click('.modal button:has-text("Submit entry")'); await cp.waitForSelector('text=hour meter reading at arrival', { timeout: 4000 }).catch(() => {});
+  check('coxswain cannot submit without both hour meters', (await docs0('vlog')).length === 0);
+  await cp.fill('#vmE1', '103'); await cp.fill('#vmE2', '93'); await cp.click('.modal button:has-text("Submit entry")'); await cp.waitForTimeout(900);
+  const vl = await docs('vlog'); check('vessel log saved with both engine readings', vl.length === 1 && vl[0].m.E1 === 103 && vl[0].m.E2 === 93, JSON.stringify(vl).slice(0, 300));
+  await cp.click('button:has-text("Add log entry")'); await cp.fill('#vdp', '12:00'); await cp.click('.modal button:has-text("Save as draft")'); await cp.waitForTimeout(900);
+  check('vessel log draft kept', (await docs('vlog')).filter(x => x.draft).length === 1);
+  // ranger on a phone
+  const R = await B.open(S.base, { viewport: { width: 390, height: 844 }, permissions: ['geolocation'], geolocation: { latitude: -2.2, longitude: 41.0 } }); const rp = R.page;
+  await login(rp, S.base, 'amina@test.org', pw, 'Ranger2026pw');
+  await rp.click('button:has-text("Start a new patrol")'); await rp.click('button:has-text("Start patrol")');
+  await rp.waitForSelector('text=Fisher check');
+  await rp.click('button.big.go:has-text("Fisher check")'); await rp.fill('#ck-n', 'Juma Ali');
+  await rp.click('button:has-text("Add another fisher")'); await rp.fill('[aria-label="Fisher 2 name"]', 'Omar Bakari');
+  await rp.click('button:has-text("Add another fisher")'); await rp.fill('[aria-label="Fisher 3 name"]', 'Said Mzee');
+  await rp.selectOption('#ck-c', 'L1'); await rp.click('.bgrid button.go:has-text("Save")');
+  await rp.waitForSelector('text=1. Juma Ali');
+  await rp.click('button:has-text("Observation")'); await rp.fill('#fo-tm', '09:15'); await rp.fill('#fo-n', 'Turtle seen'); await rp.click('.bgrid button.go:has-text("Save")');
+  await rp.click('button.warn:has-text("Incident")'); await rp.fill('#fi-d', 'Illegal net'); await rp.fill('[aria-label="Person 1 name"]', 'Person One');
+  await rp.click('button:has-text("Add another person")'); await rp.fill('[aria-label="Person 2 name"]', 'Person Two'); await rp.fill('#fi-tm', '09:40'); await rp.click('.bgrid button.warn:has-text("Save")');
+  await rp.waitForTimeout(1200);
+  let pt = (await docs('patrols'))[0];
+  check('patrol saved while recording: 3 fisher rows, observation with time', pt && pt.enc.length === 3 && pt.obsList[0].time === '09:15' && pt.status === 'Active', JSON.stringify(pt || {}).slice(0, 300));
+  check('incident kept two persons and a time', pt && pt.incList[0].persons.length === 2 && pt.incList[0].time === '09:40');
+  // admin opens the unplanned patrol while it is still running
+  const A2 = await B.open(S.base, { viewport: { width: 1440, height: 900 } }); const a2 = A2.page; await login(a2, S.base, 'admin@test.org', 'Admin2026pw'); await a2.goto(S.base + '/#patrols'); await a2.waitForSelector('table.tbl tbody tr'); await a2.click('table.tbl tbody tr'); await a2.waitForTimeout(800);
+  check('admin opens the running unplanned patrol', (await a2.textContent('body')).includes('Fisher checks / infringements'));
+  await a2.click('button:has-text("Forms")'); await a2.waitForTimeout(800);
+  check('admin sees its forms (Form 1A)', (await a2.textContent('body')).includes('Juma Ali'));
+  check('no errors on the second admin page', !A2.errs.length, JSON.stringify(A2.errs));
+  await rp.click('button:has-text("Complete patrol")'); await rp.click('button:has-text("Save as draft")'); await rp.waitForTimeout(1200);
+  pt = (await docs('patrols'))[0]; check('patrol saved as an editable draft', pt.status === 'Draft');
+  await rp.click('button:has-text("Records")'); await rp.click('.arow.tap'); await rp.waitForSelector('text=Complete patrol'); await rp.click('button:has-text("Submit")'); await rp.waitForTimeout(1500);
+  pt = (await docs('patrols'))[0]; const inc = await docs('incidents');
+  check('submitted patrol is Completed and pending review', pt.status === 'Completed' && pt.review === 'Pending review');
+  check('submitted incident has persons list and time', inc.length === 1 && inc[0].personsList.length === 2 && inc[0].time === '09:40', JSON.stringify(inc).slice(0, 200));
+  // tourism and finance: one role, entry type choice, draft
+  const T = await B.open(S.base); const tp = T.page;
+  await login(tp, S.base, 'tourfin@test.org', 'Start2026', 'Pass2026word');
+  await tp.goto(S.base + '/#tourism'); await tp.click('button:has-text("New entry")');
+  check('entry form offers tourist and finance choice', await tp.isVisible('button:has-text("Finance entry")') && await tp.isVisible('button:has-text("Tourist or visitor entry")'));
+  await tp.fill('#tn', 'Group A'); await tp.selectOption('#tvt', 'bmu'); await tp.fill('#tg', '3'); await tp.click('.modal button:has-text("Save as draft")'); await tp.waitForTimeout(900);
+  let tr = await docs('tour'); check('visitor draft saved with type BMU and no guide', tr.length === 1 && tr[0].vtype === 'bmu' && tr[0].status === 'Draft' && tr[0].guide === '');
+  await tp.click('button:has-text("New entry")'); await tp.click('button:has-text("Finance entry")'); await tp.fill('#fd', 'Fuel'); await tp.fill('#fa', '5000'); await tp.click('.modal button:has-text("Submit for approval")'); await tp.waitForTimeout(900);
+  check('finance entry submitted from the same role', (await docs('fin')).length === 1 && (await docs('fin'))[0].status === 'Submitted');
+  // history import: two paper rows -> one patrol, one incident
+  await ap.goto(S.base + '/#import'); await ap.waitForSelector('text=Import paper logs');
+  await ap.fill('#imp-txt', '19/5/2025\t4:00pm\t6:30pm\tInside the closed area\tFishing in closed area\tNo markers\tWarning\tAli Shee');
+  await ap.click('#imp-go');
+  await ap.click('button:has-text("Entry Log")');
+  await ap.fill('#imp-txt', '10/6/2025\t10:22am\tInside the LMMA\tMihreen\tLFB 3817\tJuma, Said\tStone collecting\tWarning\tPhoto taken\tAli Shee');
+  await ap.click('#imp-go'); await ap.waitForTimeout(1500);
+  check('imported patrol saved', (await docs('patrols')).some(p => p.imported && p.iso === '2025-05-19' && p.status === 'Completed'));
+  const imi = (await docs('incidents')).find(i => i.imported);
+  check('imported incident saved with code H1 and 2 persons', imi && imi.code === 'H1' && imi.personsList.length === 2 && imi.time === '10:22');
+  // admin sees compliance, no JS errors
+  await ap.goto(S.base + '/#iweni-lmma'); await ap.waitForSelector('text=Iweni LMMA Management'); await ap.click('button:has-text("Daily visits")');
+  check('compliance card shows', await ap.isVisible('text=Daily LMMA visit'));
+  const errs = [...A.errs, ...C.errs, ...R.errs, ...T.errs].filter(e => !/Geolocation|geolocation/.test(e));
+  check('no browser errors', errs.length === 0, errs.slice(0, 4).join(' | '));
+  console.log(bad ? 'FAILED ' + bad : 'ALL OK'); await B.br.close(); S.server.close(); process.exit(bad ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(2); });

@@ -1,0 +1,15 @@
+const { start, browser, login } = require('./harness');
+(async()=>{const S=await start();const B=await browser();let bad=0;const ck=(n,v)=>{console.log(v?'PASS':'FAIL',n);if(!v)bad++;};
+const r=await B.open(S.base,{viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+await login(r.page,S.base,'ranger@test.org','Start2026','Ranger2026pw');await r.page.waitForTimeout(800);
+ck('ranger starts with no planned patrol',!(await r.page.textContent('body')).includes('PLANNED')&&await r.page.locator('text=Start a new patrol').count()===1);
+const put=(c,id,b)=>S.call('PUT','/docs/'+c+'/'+id,{data:b},S.adminToken);
+const res=await put('patrols','PT-PLAN1',{id:'PT-PLAN1',iso:'2026-11-17',date:'17 Nov 2026',leader:'User ranger',rangers:['User ranger'],cox:'',bmu:'pate',area:'Iweni LMMA',status:'Planned',start:'06:00',boat:'',enc:[],obs:0,inc:0});
+ck('admin saved planned patrol',!res.error);
+await r.page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await r.page.waitForTimeout(1500);
+ck('ranger sees it without reloading',(await r.page.textContent('body')).includes('PT-PLAN1'));
+await put('settings','adhocPatrol',{__v:false});
+await r.page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await r.page.waitForTimeout(1500);
+ck('unplanned start hidden when admin switches it off',await r.page.locator('text=Start a new patrol').count()===0&&await r.page.locator('text=PT-PLAN1').count()>0);
+ck('no errors',!r.errs.length);if(r.errs.length)console.log(r.errs);
+await B.br.close();S.server.close();process.exit(bad?1:0);})();

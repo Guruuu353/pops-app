@@ -1,0 +1,21 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# dependencies and build output
+node_modules/
+web/dist/
+
+# data (never commit the database or uploaded files)
+*.sqlite
+*.sqlite-*
+*.db
+/data/
+/files/
+/dist/
+
+# tests and local junk
+test/shots/
+*.log
+.DS_Store
