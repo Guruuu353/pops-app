@@ -462,3 +462,6 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 .notice.crit{border-color:var(--crit,#d4432f)}.notice.crit strong{color:var(--crit,#d4432f)}
 .fa-alert{margin:10px 14px 0;padding:10px 12px;border-radius:12px;background:var(--warnbg,#3a2f12);border:1px solid var(--warn,#c98a00);display:flex;gap:10px;align-items:flex-start;justify-content:space-between;font-size:14px}
 .fa-alert button{background:none;border:0;color:inherit;font-size:20px;line-height:1;cursor:pointer}
+
+/* import entry table on phones: full-width boxes, nothing sideways */
+@media (max-width:700px){table.gridtbl td input{width:100%;min-width:0!important;box-sizing:border-box}table.gridtbl td{align-items:center}table.gridtbl td::before{flex:0 0 40%}.main,.card{max-width:100%;min-width:0}.main{overflow-x:hidden}}
