@@ -468,3 +468,10 @@ label.btn.disabled{opacity:.6;pointer-events:none}
 /* wide tables never push the page sideways: they scroll inside their card */
 .card{min-width:0;max-width:100%}.main{min-width:0}.tscroll{max-width:100%;overflow-x:auto}
 @media (min-width:701px){table.gridtbl input{min-width:130px}}
+
+/* loading screen: logo and text centred in the window */
+.boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:24px;background:var(--bg,#0b1f26)}
+.boot img{display:block}.boot p{margin:0}.boot-name{font-size:22px;font-weight:700;letter-spacing:.02em;margin-top:6px!important}
+.boot-spin{width:22px;height:22px;border-radius:50%;border:3px solid #8884;border-top-color:var(--brand,#0aa);margin-top:14px;animation:bootspin .9s linear infinite}
+@keyframes bootspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.boot-spin{animation:none}}

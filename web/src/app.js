@@ -110,11 +110,11 @@ const App=()=>{
  const dark=()=>{const a=document.documentElement.getAttribute('data-theme');return a==='dark'||(a!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);};
  const [,force]=useState(0);
  const theme=()=>{document.documentElement.setAttribute('data-theme',dark()?'light':'dark');force(n=>n+1);};
- if(user===undefined)return html`<div className="boot"><${Logo} s=${72}/><p className="muted">Loading…</p></div>`;
+ if(user===undefined)return html`<div className="boot"><${Logo} s=${72}/><p className="boot-name">POps</p><p className="muted">Loading…</p><span className="boot-spin" aria-hidden="true"></span></div>`;
  if(!user)return html`<${Login} onIn=${u=>{setUser(u);}}/>`;
  if(user.must_change)return html`<${ForcedPw} onIn=${u=>setUser(u)}/>`;
  if(loadErr)return html`<div className="boot"><${Logo} s=${72}/><p>Could not load your records: ${loadErr}</p><button className="btn primary" onClick=${()=>location.reload()}>Try again</button></div>`;
- if(!ready)return html`<div className="boot"><${Logo} s=${72}/><p className="muted">Loading your records…</p></div>`;
+ if(!ready)return html`<div className="boot"><${Logo} s=${72}/><p className="boot-name">POps</p><p className="muted">Loading your records…</p><span className="boot-spin" aria-hidden="true"></span></div>`;
  if(role==='ranger')return html`<${Ctx.Provider} value=${ctx}><${FieldShell}/><${Toasts} toasts=${toasts}/></${Ctx.Provider}>`;
  const View=VIEWS[mod];const m=MODS.find(x=>x.id===mod);
  const groups=[];MODS.forEach(x=>{if(!can(x.id))return;let g=groups.find(k=>k[0]===x.group);if(!g){g=[x.group,[]];groups.push(g);}g[1].push(x);});
