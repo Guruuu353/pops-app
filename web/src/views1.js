@@ -1,4 +1,7 @@
 /* ============ views part 1: dashboards, map, patrols, incidents, ranger app ============ */
+/* newest first: sort records by date and start time, latest at the top */
+const newestKey=p=>{const t=/^(\d{1,2}):(\d{2})/.exec(p.start||p.time||'');return (patrolIso(p)||'')+' '+(t?pad(+t[1])+':'+t[2]:'');};
+const newest=a=>a.map(x=>[newestKey(x),x]).sort((x,y)=>y[0]<x[0]?-1:y[0]>x[0]?1:0).map(x=>x[1]);
 const incItem=i=>({id:i.id,layer:'incidents',x:i.x!=null?i.x:proj(i.lat,i.lon)[0],y:i.y!=null?i.y:proj(i.lat,i.lon)[1],title:i.cat,when:i.date,team:i.ranger+' ('+i.patrol+')',desc:i.desc,status:STAGES[i.stage],follow:i.action+(i.ref!=='None'?'. Referral: '+i.ref:''),loc:i.loc,ref:i.id});
 const Photos=({imgs})=>imgs&&imgs.length?html`<div className="photos">${imgs.map((src,i)=>html`<a key=${i} className="ph" href=${src} target="_blank" rel="noopener"><img src=${src} alt=${'Photograph '+(i+1)}/></a>`)}</div>`:html`<p className="muted small">No photographs attached.</p>`;
 
@@ -19,7 +22,7 @@ const useMapData=()=>{
 /* ---------- what happened on a patrol: timeline and map items ---------- */
 const EVL={start:'Patrol started',pause:'Paused',resume:'Resumed',stop:'Patrol stopped',submit:'Submitted for review',draft:'Saved as draft',offline:'Network lost',online:'Network back',gps_lost:'GPS lost',gps_ok:'GPS back',obs:'Observation',check:'Fisher check',seizure:'Check with seizure',incident:'Incident',photo:'Photograph'};
 const hmOf=iso=>{const d=new Date(iso);return isNaN(d)?'':pad(d.getHours())+':'+pad(d.getMinutes());};
-const evList=p=>{const ev=(p.events||[]).slice();if(ev.length)return ev;/* older records: rebuild from the lists */const o=[];if(p.start)o.push({t:'',k:'start',n:'Started '+p.start,ll:p.track&&p.track[0]||null});(p.obsList||[]).forEach(x=>o.push({t:'',k:'obs',n:x.type+(x.time?' '+x.time:''),ll:x.ll||null}));(p.enc||[]).forEach(x=>o.push({t:'',k:x.seized?'seizure':'check',n:x.name||'',ll:x.ll||null}));(p.incList||[]).forEach(x=>o.push({t:'',k:'incident',n:x.cat||'',ll:x.ll||null}));return o;};
+const evList=p=>{const ev=(p.events||[]).slice();if(ev.length)return ev;if(p.imported){const o=[];if(p.start)o.push({t:'',k:'start',n:'Left at '+p.start+(p.areas&&p.areas[0]?' for '+p.areas[0]:'')});if(p.observations)o.push({t:'',k:'obs',n:'Observed: '+p.observations});if(p.challenges)o.push({t:'',k:'obs',n:'Challenges: '+p.challenges});if(p.action&&p.action!=='—')o.push({t:'',k:'obs',n:'Action taken: '+p.action});if(p.end&&p.end!=='—')o.push({t:'',k:'stop',n:'Back at '+p.end});return o;}/* older records: rebuild from the lists */const o=[];if(p.start)o.push({t:'',k:'start',n:'Started '+p.start,ll:p.track&&p.track[0]||null});(p.obsList||[]).forEach(x=>o.push({t:'',k:'obs',n:x.type+(x.time?' '+x.time:''),ll:x.ll||null}));(p.enc||[]).forEach(x=>o.push({t:'',k:x.seized?'seizure':'check',n:x.name||'',ll:x.ll||null}));(p.incList||[]).forEach(x=>o.push({t:'',k:'incident',n:x.cat||'',ll:x.ll||null}));return o;};
 const patrolItems=(p,o={})=>{
  const out=[];const evs=evList(p);const lastLL=(p.track&&p.track.length?p.track[p.track.length-1]:null)||evs.slice().reverse().map(e=>e.ll).find(Boolean)||null;
  if(['Active','Paused'].includes(p.status)&&lastLL){const [x,y]=proj(lastLL[0],lastLL[1]);const age=p.seen?(Date.now()-new Date(p.seen))/60000:null;const stale=age!=null&&age>3;
@@ -30,12 +33,12 @@ const patrolItems=(p,o={})=>{
 };
 
 const PatrolTimeline=({p})=>{
- const ev=evList(p);
+ const ev=evList(p);const [nf,setNf]=useState(true);const order=ev.map((_,i)=>i);if(nf)order.reverse();
  if(!ev.length)return html`<p className="muted">No events were recorded for this patrol.</p>`;
  const gap=(i)=>{const e=ev[i];const pair={offline:'online',gps_lost:'gps_ok'}[e.k];if(!pair||!e.t)return '';const n=ev.slice(i+1).find(x=>x.k===pair);if(!n||!n.t)return ' (still out)';const m=Math.round((new Date(n.t)-new Date(e.t))/60000);return ' (back after '+(m<1?'under a minute':m+' min')+')';};
  const bad=ev.filter(e=>e.k==='offline'||e.k==='gps_lost').length;
  return html`<div>${bad>0&&html`<${Notice} tone="warn" title=${bad+' interruption'+(bad>1?'s':'')}>The ranger lost network or GPS during this patrol. Records were kept on the phone and sent when the signal returned.</${Notice}>`}
- <ol className="tline">${ev.map((e,i)=>html`<li key=${i} className=${'tl-'+(e.k==='offline'||e.k==='gps_lost'?'bad':e.k==='online'||e.k==='gps_ok'?'ok':'')}><time>${e.t?hmOf(e.t):'—'}</time><b>${EVL[e.k]||e.k}</b><span>${e.n||''}${gap(i)}</span></li>`)}</ol></div>`;
+ <div className="seg" style=${{margin:'0 0 8px'}}><button type="button" className=${'segb '+(nf?'on':'')} onClick=${()=>setNf(true)}>Newest first</button><button type="button" className=${'segb '+(nf?'':'on')} onClick=${()=>setNf(false)}>Oldest first</button></div><ol className="tline">${order.map(i=>{const e=ev[i];return html`<li key=${i} className=${'tl-'+(e.k==='offline'||e.k==='gps_lost'?'bad':e.k==='online'||e.k==='gps_ok'?'ok':'')}><time>${e.t?hmOf(e.t):'—'}</time><b>${EVL[e.k]||e.k}</b><span>${e.n||''}${gap(i)}</span></li>`;})}</ol></div>`;
 };
 
 /* ---------- progress alerts for patrols in the field ---------- */
@@ -66,7 +69,7 @@ const LiveMap=()=>{
  useEffect(()=>setLayers(allowed),[role]);
  const [sel,setSel]=useState(null);
  const tog=id=>setLayers(l=>l.includes(id)?l.filter(x=>x!==id):[...l,id]);
- const pick=i=>setSel(i.pt?{...i,title:'Boundary point '+i.pt.n,when:'Supplied coordinate',team:'',desc:i.pt.lat+', '+i.pt.lon,status:'Logged',follow:''}:i);
+ const pick=i=>setSel(i.detail&&!i.when?{...i,title:i.detail.title,rows:i.detail.rows,chip:i.detail.chip}:i);
  const loc=i=>{if(i.loc==='sensitive'&&role==='board')return 'Restricted. Exact enforcement coordinates are limited to the Super Admin and the reporting ranger.';const [la,lo]=unproj(i.x,i.y);return toDMS(la,'N','S')+' / '+toDMS(lo,'E','W');};
  return html`<div>
  <${PageHead} title="Live Operations Map" sub="Iweni LMMA and surrounding waters. You only see the layers your role allows."/>
@@ -81,7 +84,7 @@ const LiveMap=()=>{
   </div>
   <aside className="mapside">
    ${sel?html`<${Card} title=${sel.title} right=${html`<button className="iconbtn" aria-label="Clear selection" onClick=${()=>setSel(null)}><${Icon} n="x" s=${16}/></button>`}>
-    <${KV} rows=${[['Date and time',sel.when],['Location',loc(sel)],['Assigned team',sel.team],['Description',sel.desc],['Status',html`<${Chip} t=${sel.status}/>`],['Follow-up actions',sel.follow]]}/>
+    <${KV} rows=${sel.rows?[...(sel.chip?[['Kind',html`<${Chip} t=${sel.chip}/>`]]:[]),...sel.rows]:[['Date and time',sel.when],['Location',loc(sel)],['Assigned team',sel.team],['Description',sel.desc],['Status',html`<${Chip} t=${sel.status}/>`],['Follow-up actions',sel.follow]]}/>
 </${Card}>`:
    html`<${Card} title="Select a map item"><p className="muted">Click a marker or a track to see its date and time, location, assigned team, description, photographs, status and follow-up actions.</p>
    <h3 className="mini-h">Your access</h3><p className="muted small">${({admin:'Full authorized visibility.',board:'Full oversight. Exact enforcement locations are generalised.',ranger:'Assigned operational information only.',cox:'Patrols and boats you support.',officer:'Assigned project information only.',fisheries:'Permitted all-project and patrol visibility. Incidents are not shown.',bmu:'Permitted patrol and LMMA information for '+bmuName(bmuId)+'.'})[role]}</p></${Card}>`}
@@ -219,7 +222,7 @@ const Patrols=()=>{
  const me=ROLES[role].user;
  const palerts=['admin','fisheries'].includes(role)?progressAlerts(patrols,settings):[];
  const [q,setQ]=useState('');const [st,setSt]=useState('All');const [open,setOpen]=useState(null);const [mk,setMk]=useState(false);const [dt,setDt]=useState('info');
- let list=patrols;
+ let list=newest(patrols);
  if(role==='bmu')list=list.filter(p=>p.bmu===bmuId);
  if(role==='ranger')list=list.filter(p=>(p.rangers||[]).includes(me)||p.leader===me);
  if(role==='cox')list=list.filter(p=>p.cox===me);
@@ -272,7 +275,7 @@ const Incidents=()=>{
  const {role,incidents,setIncidents,log,toast,can,account}=useApp();
  const me=account.name;
  const [open,setOpen]=useState(null);const [cat,setCat]=useState('All');const [mk,setMk]=useState(false);const [auth,setAuth]=useState(REFER[0]);
- let list=incidents;if(role==='ranger')list=list.filter(i=>i.ranger===me);
+ let list=newest(incidents);if(role==='ranger')list=list.filter(i=>i.ranger===me);
  list=list.filter(i=>cat==='All'||i.cat===cat);
  const cur=open&&incidents.find(i=>i.id===open);
  const write=can('incidents')==='w';

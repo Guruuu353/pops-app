@@ -22,8 +22,8 @@ Super Admin, Board Chairperson, Marine Ranger, Coxswain, Conservation Officer, F
 - Rangers: phone-style PWA, GPS patrol with continuous saving, drafts, observations and incidents with time and several persons, fisher checks with many fishers.
 - Daily LMMA compliance: a day counts as visited if a submitted patrol is in the LMMA (flag, area name or GPS track). Settings: start date, cutoff, daily on/off. Computed in the browser.
 - Boats: per-boat setting for hour meters; Engine 1/2 hours required at arrival only where meters work; service alerts.
-- Maps: BMU certificate point (-2.142838333, 40.99678167); zones are stored in the database. Import the client's Figure 1 / KML (Iweni LMMA > Zones). Until then the drawn shapes are placeholders and their areas will not match the stated 2.25 / 1.2 / 1.05 km².
-- Import paper logs (admin): type or paste the Daily Patrol Log and Entry Log, check, import. Rows are marked Imported.
+- Maps: zones follow the client's Figure 1 and are stored in the database. Seagrass habitat (gear restricted zone) is the north strip made of points 11, 12, 1, 10, 9, 8, 7. Reef habitat (no-take zone) is the south area made of points 7, 8, 9, 10, 1, 2, 3, 4, 5, 6. The LMMA outline is 11, 12, 1, 2, 3, 4, 5, 6, 7. Joining the points 1 to 12 in table order (the earlier build) left a wedge that belongs to no zone. Mapped areas are about 1.40 / 1.20 / 2.59 km2 against the stated 1.2 / 1.05 / 2.25, so the stated figures need confirming with Patte. Tap a zone, point, village, track, marker or any empty spot to get a details card (on wide screens it also fills the side panel). Villages are set in Iweni LMMA > Coordinates (only Pate is seeded; add Shanga Rubu and Shanga Ishakani with their coordinates). Import a surveyed KML/GeoJSON on the Zones tab to replace the shapes.
+- Import paper logs (admin): load a CSV file, paste from Excel or type the Daily Patrol Log and Entry Log, check, import. Rows are marked Imported and grouped in a batch that can be removed. Sample files from the May-June 2025 pages are in docs/import-samples/.
 
 ## Tests
     node --no-warnings test/api.test.js && node --no-warnings test/modules.js && node --no-warnings test/e2e.js
@@ -46,3 +46,12 @@ Figure 1 / KML of the zones, the remaining log pages, the default ranger, and th
 - The "Scanned pages of the whole batch" card attaches its files to every imported row. Use it only for a sheet that covers all rows.
 - Images can still be added or removed later on each record.
 - Import has two ways to enter rows: **Type in a table** (one box per paper column, blanks allowed, so nothing shifts) and **Paste from Excel**. After pasting, "Move into the table to fix blanks" puts the rows in the table so you can correct them.
+
+## Importing two years of paper logs
+- Type the sheets into Excel or Google Sheets (one file per sheet, first row = the column names), save as CSV, and use "Load a CSV or text file". Columns are matched by their headings in any order, and the sheet is detected. "Download a blank template" gives the right headings.
+- Entry Log: leave the date empty for a second vessel on the same day and it takes the date above. Entries are linked to the patrol of the same day when one exists, so import the Daily Patrol Log first.
+- Overnight patrols (Time In earlier than Time Out) get their length worked out; very short or very long ones are flagged.
+- Scanned pages: add each page and set the dates it covers (a date in the file name fills them in). It is attached to every row in that range. Rows without an image are fine.
+- Each import is a batch (Imported batches card). An admin can remove a batch and import it again.
+- "Outside LMMA" patrols no longer count as daily LMMA visits.
+- Tests: `node --no-warnings test/map.js && node --no-warnings test/import-files.js`.

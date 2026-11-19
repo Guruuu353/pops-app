@@ -86,7 +86,7 @@ const App=()=>{
   (async()=>{try{
    await ob.flush();
    const [{docs},lk]=await Promise.all([api('GET','/docs'),api('GET','/lookups')]);
-   LOOK.infringements=lk.infringements;LOOK.fees=lk.fees;LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains||[];LOOK.bmu=lk.bmu;LOOK.today=lk.today;try{const z=await api('GET','/zones');ZONES_API.length=0;ZONES_API.push(...z.zones);applyZones(z.zones);LOOK.bmu=z.bmu||lk.bmu;}catch(e){}
+   LOOK.infringements=lk.infringements;LOOK.fees=lk.fees;LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains||[];LOOK.bmu=lk.bmu;LOOK.today=lk.today;try{const z=await api('GET','/zones');ZONES_API.length=0;ZONES_API.push(...z.zones);applyZones(z.zones);applyPlaces(z.landmarks);LOOK.bmu=z.bmu||lk.bmu;}catch(e){}
    applyDocs(docs);
    if(['admin','board'].includes(user.role)){try{setPeople((await api('GET','/users')).users);}catch(e){}}
    if(user.role==='admin'){try{setAudit((await api('GET','/audit?limit=300')).audit.map(a=>[(a.ts||'').replace('T',' ').slice(0,16),a.user_name||'',String(a.action||'').replace(/_/g,' '),a.entity||'',a.entity_id||'']));}catch(e){}}

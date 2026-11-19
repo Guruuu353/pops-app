@@ -91,14 +91,16 @@ function seed(db, { adminEmail, adminPassword } = {}) {
       db.exec('COMMIT');
     } catch (e) { db.exec('ROLLBACK'); throw e; }
   }
-  // Upgrade zones that still hold the first placeholder shapes (convex hulls) to the ordered-table shapes. Edited zones are left alone.
+  // Upgrade zones that still hold an earlier seeded shape (convex hulls, or the table-order shapes that left a gap and had the zones swapped).
+  // Zones an admin edited or imported are left alone.
   for (const z of ref.SEED_ZONES) {
     const row = db.prepare('SELECT feature FROM zones WHERE id=?').get(z.id);
     if (!row) continue;
     let note = ''; try { note = (JSON.parse(row.feature).properties || {}).note || ''; } catch (e) {}
-    if (/convex hull|^Placeholder|^Hull of/i.test(note))
-      db.prepare('UPDATE zones SET feature=?,updated_at=? WHERE id=?').run(JSON.stringify(z.feature), nowIso(), z.id);
+    if (/convex hull|^Placeholder|^Hull of|^Built from the supplied coordinate table in order/i.test(note))
+      db.prepare('UPDATE zones SET name=?,feature=?,updated_at=? WHERE id=?').run(z.name, JSON.stringify(z.feature), nowIso(), z.id);
   }
+  if (!db.getSetting('landmarks')) db.setSetting('landmarks', ref.LANDMARKS);
   const n = db.prepare('SELECT COUNT(*) c FROM users').get().c;
   if (n === 0) {
     const email = (adminEmail || 'admin@patteconservation.org').toLowerCase();

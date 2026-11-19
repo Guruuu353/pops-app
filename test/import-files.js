@@ -1,0 +1,32 @@
+// Loads the May-June 2025 sample files through the file picker, imports them, checks the records and undoes the batch.
+const { start, browser, login } = require('./harness');
+(async () => {
+  const S = await start(); const B = await browser(); let bad = 0;
+  const ck = (n, v, x) => { console.log(v ? 'PASS' : 'FAIL', n, v ? '' : x || ''); if (!v) bad++; };
+  const a = await B.open(S.base, { viewport: { width: 1440, height: 900 } }); await login(a.page, S.base, 'admin@test.org', 'Admin2026pw');
+  await a.page.goto(S.base + '/#import'); await a.page.waitForSelector('#imp-file', { state: 'attached' });
+  await a.page.setInputFiles('#imp-file', 'docs/import-samples/daily-patrol-log_may-june-2025.tsv'); await a.page.waitForTimeout(600);
+  let body = await a.page.textContent('body');
+  ck('daily file: 28 rows ready, none need attention', /Check \(28 ready, 0 need attention\)/.test(body), body.match(/Check \([^)]*\)/));
+  ck('summary shows the date range', /19 May 2025 to 15 Jun 2025/.test(body));
+  await a.page.click('#imp-go'); await a.page.waitForTimeout(1500);
+  await a.page.setInputFiles('#imp-file', 'docs/import-samples/entry-log_may-june-2025.tsv'); await a.page.waitForTimeout(600);
+  body = await a.page.textContent('body');
+  ck('entry file detected, 7 incidents ready (blank days skipped, date copied down)', /Check \(7 ready, 0 need attention\)/.test(body), body.match(/Check \([^)]*\)/));
+  await a.page.click('#imp-go'); await a.page.waitForTimeout(1500);
+  const d = (await S.call('GET', '/docs', null, S.adminToken)).docs;
+  ck('28 patrols and 7 incidents saved', d.patrols.length === 28 && d.incidents.length === 7, d.patrols.length + '/' + d.incidents.length);
+  const p19 = d.patrols.find(p => p.iso === '2025-05-19'); const p20 = d.patrols.find(p => p.iso === '2025-05-20');
+  ck('Tengefu kept in the area text, overnight length worked out', /Tengefu/.test(p19.area) && p19.secs === 52200, p19.area + ' ' + p19.secs);
+  ck('outside patrol is not counted inside', p20.inLmma === false);
+  const i2 = d.incidents.filter(i => i.iso === '2025-05-26');
+  ck('second vessel took the date above and both link to that day\'s patrol', i2.length === 2 && i2.every(i => i.patrol === d.patrols.find(p => p.iso === '2025-05-26').id), JSON.stringify(i2.map(i => i.patrol)));
+  ck('five people on one incident', i2.some(i => i.personsList.length === 5), JSON.stringify(i2.map(i => i.personsList.length)));
+  ck('every record carries a batch id', d.patrols.every(p => p.batch) && d.incidents.every(i => i.batch));
+  await a.page.goto(S.base + '/#import'); await a.page.waitForSelector('text=Imported batches');
+  await a.page.click('button:has-text("Remove batch") >> nth=0'); await a.page.click('button:has-text("Yes, remove")'); await a.page.waitForTimeout(1500);
+  const d2 = (await S.call('GET', '/docs', null, S.adminToken)).docs;
+  ck('removing the newest batch removes only its incidents', d2.patrols.length === 28 && d2.incidents.length === 0, d2.patrols.length + '/' + d2.incidents.length);
+  ck('no browser errors', !a.errs.length, JSON.stringify(a.errs));
+  await B.br.close(); S.server.close(); process.exit(bad ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });

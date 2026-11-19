@@ -18,26 +18,31 @@ const LMMA_POINTS = [
   [12, dms(2, 12, 14.5), dms(41, 0, 57.2)],
 ].map(([n, la, lo, tag]) => ({ n, lat: -la, lon: lo, tag: tag || null }));
 
-// The 12 points are taken in the order of the supplied table. Joined in that order they enclose 2.24 km2 (stated 2.25).
-// Points 1 to 10 enclose 1.19 km2 (stated gear restricted zone 1.2) and points 10, 11, 12, 1 enclose 1.05 km2
-// (stated no-take zone 1.05). The two zones share the edge from point 10 to point 1.
+// Zone shapes follow the client's Figure 1. The 12 supplied points make three shapes:
+//   Seagrass habitat, gear restricted zone (north strip): 11, 12, 1, 10, 9, 8, 7
+//   Reef habitat, no-take zone (south, offshore):         7, 8, 9, 10, 1, 2, 3, 4, 5, 6
+//   LMMA outline (both together):                         11, 12, 1, 2, 3, 4, 5, 6, 7
+// Joining the points 1 to 12 in table order cuts a diagonal from 10 to 11 and leaves a wedge that belongs to no zone.
 const ring = (pts) => { const r = pts.map((p) => [p.lon, p.lat]); return [...r, r[0]]; };
-const feature = (name, kind, pts, note) => ({
-  type: 'Feature',
-  properties: { name, kind, note },
-  geometry: { type: 'Polygon', coordinates: [ring(pts)] },
-});
 const pick = (ns) => ns.map((n) => LMMA_POINTS.find((p) => p.n === n));
-const SEED_NOTE = 'Built from the supplied coordinate table in order. Replace with the surveyed boundary (KML) if Patte supplies one.';
+const SEED_NOTE = 'Zone shapes follow the client Figure 1 (reef habitat south, seagrass habitat north), built from the 12 supplied points.';
+const feature = (name, kind, ns, habitat) => ({
+  type: 'Feature',
+  properties: { name, kind, habitat, points: ns, note: SEED_NOTE },
+  geometry: { type: 'Polygon', coordinates: [ring(pick(ns))] },
+});
 
 const SEED_ZONES = [
   { id: 'zone-lmma', name: 'Iweni LMMA (co-management area)', kind: 'lmma', stated_km2: 2.25,
-    feature: feature('Iweni LMMA', 'lmma', LMMA_POINTS, SEED_NOTE) },
-  { id: 'zone-gear', name: 'Gear restricted zone', kind: 'gear', stated_km2: 1.2,
-    feature: feature('Gear restricted zone', 'gear', pick([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), SEED_NOTE) },
-  { id: 'zone-ntz', name: 'No-take zone', kind: 'ntz', stated_km2: 1.05,
-    feature: feature('No-take zone', 'ntz', pick([10, 11, 12, 1]), SEED_NOTE) },
+    feature: feature('Iweni LMMA', 'lmma', [11, 12, 1, 2, 3, 4, 5, 6, 7], '') },
+  { id: 'zone-gear', name: 'Seagrass habitat: Gear restricted zone', kind: 'gear', stated_km2: 1.2,
+    feature: feature('Seagrass habitat: Gear restricted zone', 'gear', [11, 12, 1, 10, 9, 8, 7], 'Seagrass') },
+  { id: 'zone-ntz', name: 'Reef habitat: No-take zone', kind: 'ntz', stated_km2: 1.05,
+    feature: feature('Reef habitat: No-take zone', 'ntz', [7, 8, 9, 10, 1, 2, 3, 4, 5, 6], 'Reef') },
 ];
+
+// Villages and landmarks shown on the maps. Admin can add more (Iweni LMMA > Coordinates).
+const LANDMARKS = [{ id: 'lm-pate', name: 'Pate', kind: 'village', lat: -2.142838333, lon: 40.99678167 }];
 
 // BMU certificate details (Beach Management Unit, Pate).
 const BMU = {
@@ -111,4 +116,4 @@ const ROLES = {
   tourfin: 'Tourism and Finance Officer',
 };
 
-module.exports = { LMMA_POINTS, SEED_ZONES, BMU, INFRINGEMENTS, FEES, PROJECTS, ROLES };
+module.exports = { LMMA_POINTS, SEED_ZONES, LANDMARKS, BMU, INFRINGEMENTS, FEES, PROJECTS, ROLES };
