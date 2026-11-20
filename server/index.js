@@ -516,7 +516,7 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
       if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(webDir, 'index.html');
       if (!fs.existsSync(f)) throw nf('Web app is not built. Run: npm run build');
       const ext = path.extname(f);
-      res.writeHead(200, { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': f.endsWith('index.html') || f.endsWith('sw.js') ? 'no-cache' : 'public, max-age=3600' });
+      res.writeHead(200, { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': /\.(html|js|css|webmanifest)$/.test(f) ? 'no-cache' : 'public, max-age=3600' });
       fs.createReadStream(f).pipe(res);
     } catch (e) {
       if (e instanceof HttpError) return send(res, e.code, { error: e.message, errors: e.errors });

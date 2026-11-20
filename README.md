@@ -1,8 +1,7 @@
 # POps – Patte Operations Platform
 
 The approved POps demo screens (all modules, installable Ranger PWA, paper-style forms and documents, vessel log, real maps) running on a real backend. No demo or sample content: every list starts empty and is filled by real users.
--2.209474, 41.006465
--2.207765, 41.013368
+
 ## Run locally
     export POPS_ADMIN_EMAIL=you@patteconservation.com POPS_ADMIN_PASSWORD='choose-a-long-one'
     bash web/build.sh            # builds web/dist (bash + node only)

@@ -128,7 +128,7 @@ const App=()=>{
  },[user&&user.id,user&&user.must_change]);
  useEffect(()=>{const f=()=>setH(location.hash);window.addEventListener('hashchange',f);const p=()=>setInstallEv(!!window.__pwaPrompt);window.addEventListener('pwa-ready',p);const on=()=>{setOnline(true);ob.flush().then(r=>r.sent&&toast(r.sent+' saved record'+(r.sent>1?'s':'')+' sent to the server'));};const off=()=>setOnline(false);const po=()=>setPend(ob.list().length);window.addEventListener('online',on);window.addEventListener('offline',off);window.addEventListener('pops-outbox',po);return()=>{window.removeEventListener('hashchange',f);window.removeEventListener('pwa-ready',p);window.removeEventListener('online',on);window.removeEventListener('offline',off);window.removeEventListener('pops-outbox',po);};},[]);
  useEffect(()=>{if(h==='#field'&&user&&role!=='ranger')go('dashboard');},[h,user]);
- useEffect(()=>{if(window.POPS_PWA&&'serviceWorker' in navigator&&/^https?:/.test(location.protocol)){navigator.serviceWorker.register('sw.js').catch(()=>{});}},[]);
+ useEffect(()=>{if(window.POPS_PWA&&'serviceWorker' in navigator&&/^https?:/.test(location.protocol)){const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.register('sw.js').catch(()=>{});navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!window.__reloaded){window.__reloaded=true;location.reload();}});}},[]);
  // shared reference lists used by the screens
  PROJECTS.splice(0,PROJECTS.length,...projects.map(normProj));
  PEOPLE.splice(0,PEOPLE.length,...people);
@@ -180,7 +180,7 @@ const App=()=>{
    <ul>${notes.length?notes.map(n=>html`<li key=${n.id} className=${(seen.includes(n.id)&&n.tone!=='crit'?'read ':'')+n.tone}><button onClick=${()=>{markSeen([n.id]);setNotif(false);n.act();}}><${Chip} t=${n.kind} tone=${n.tone}/><span>${n.text}</span><${Icon} n="chev" s=${14}/></button></li>`):html`<li className="none">Nothing needs your attention.</li>`}</ul><small>Tap an item to open it. Alerts follow your permissions.</small></section>`}
   ${['admin','board','officer','cox'].includes(role)&&html`<${SosBanner}/>`}
   <main id="content">${can(mod)?html`<${View} key=${role+bmuId+mod}/>`:html`<div key=${role+mod}><${PageHead} title=${m.label} sub=${m.fn}/><${Denied} mod=${m.label} role=${role}/></div>`}</main>
-  <footer className="foot"><${Logo} s=${28}/><div><b>Patte Conservation CBO</b><small>Iweni Locally Managed Marine Area · Pate Island, Lamu, Kenya</small><small>POps · Patte Operations Platform</small></div></footer>
+  <footer className="foot"><${Logo} s=${28}/><div><b>Patte Conservation CBO</b><small>Iweni Locally Managed Marine Area · Pate Island, Lamu, Kenya</small><small>POps · Patte Operations Platform · version ${'__BUILD__'}</small></div></footer>
  </div>
  <${Toasts} toasts=${toasts}/>
  </div></${Ctx.Provider}>`;

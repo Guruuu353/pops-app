@@ -5,5 +5,5 @@ SRC="src/data.js src/persist.js src/ui.js src/geo.js src/forms.js src/vessel.js 
 rm -rf dist; mkdir -p dist; cp public/* dist/ 2>/dev/null
 cat $SRC > dist/app.js
 cp src/styles.css dist/styles.css
-V=$(date +%s); sed -i "s/__V__/$V/" dist/sw.js
+V=$(date +%s); sed -i "s/__V__/$V/" dist/sw.js; sed -i "s/__BUILD__/$(date -u +%Y-%m-%d.%H%M)/" dist/app.js
 echo built $(wc -c < dist/app.js) bytes

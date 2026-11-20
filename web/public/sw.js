@@ -8,5 +8,6 @@ self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET')return;c
  if(isTile(u)){e.respondWith((async()=>{const c=await caches.open(TILES);const hit=await c.match(r.url);if(hit)return hit;try{const n=await fetch(r.url,{mode:'cors'});if(n.ok)c.put(r.url,n.clone());return n;}catch(x){return new Response('',{status:504});}})());return;}
  if(u.origin===location.origin&&u.pathname.startsWith('/api/'))return;   // records are never cached
  if(r.mode==='navigate'){e.respondWith(fetch(r).catch(()=>caches.match('/')));return;}
- if(u.origin===location.origin||LIBS.includes(r.url)||/fonts\.(googleapis|gstatic)\.com/.test(u.hostname)){e.respondWith((async()=>{const c=await caches.open(V);const hit=await c.match(r);const net=fetch(r).then(n=>{if(n.ok||n.type==='opaque')c.put(r,n.clone());return n;}).catch(()=>hit);return hit||net;})());}
+ if(u.origin===location.origin){e.respondWith((async()=>{const c=await caches.open(V);try{const n=await fetch(r,{cache:'no-store'});if(n.ok)c.put(r,n.clone());return n;}catch(x){const hit=await c.match(r);return hit||new Response('',{status:504});}})());return;}   // the app itself: always the newest copy when online, the saved copy at sea
+ if(LIBS.includes(r.url)||/fonts\.(googleapis|gstatic)\.com/.test(u.hostname)){e.respondWith((async()=>{const c=await caches.open(V);const hit=await c.match(r);const net=fetch(r).then(n=>{if(n.ok||n.type==='opaque')c.put(r,n.clone());return n;}).catch(()=>hit);return hit||net;})());}
 });
