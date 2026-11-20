@@ -5,6 +5,10 @@ const FT={
 };
 Object.assign(FT.en,{alertPaused:'Your patrol is still paused. Resume it, or complete it if you are done.',alertLong:'Your patrol has been open for {h} hours. Are you still on patrol? Complete it when you are back.',alertGps:'GPS signal has been lost for a few minutes. Move to open sky and check that location is on.',inProg:'Patrol in progress',returnP:'Return to patrol',activeBlock:'You already have a patrol in progress. Return to it or close it first.',extra:'You have more than one open patrol. Close the extra ones so records do not get mixed.',closeP:'Close without submitting',since:'Started',noPlanned:'No patrol assigned to you yet. Your manager will plan one.',draft:'Save as draft',continueP:'Continue patrol',drafts:'Drafts and open patrols',edit:'Edit',del:'Delete',addFisher:'Add another fisher',others:'Other fishers on this check',persons2:'Persons involved',addPerson:'Add another person',unknown:'Persons not identified',pname:'Name',lmmaQ:'This patrol goes inside the Iweni LMMA',visitToday:'LMMA visit today',visited:'Visited',notYet:'Not yet',streak:'day streak',noGps:'GPS is not available. Allow location for POps in your phone settings.',planned:'Assigned to you',newPatrol:'Start a new patrol',date:'Date',obsT:'Observations',incT:'Incidents',savedOn:'Saved on this phone. It is sent when there is signal.',pendingSend:'waiting to send',submitted:'Patrol submitted for review'});
 Object.assign(FT.sw,{alertPaused:'Doria yako bado imesimamishwa. Endelea, au ikamilishe kama umemaliza.',alertLong:'Doria yako imekuwa wazi kwa saa {h}. Bado uko doria? Ikamilishe ukirudi.',alertGps:'Ishara ya GPS imepotea kwa dakika chache. Nenda sehemu wazi na uhakikishe eneo limewashwa.',inProg:'Doria inaendelea',returnP:'Rudi kwenye doria',activeBlock:'Tayari una doria inayoendelea. Rudi kwake au ifunge kwanza.',extra:'Una doria zaidi ya moja wazi. Funga za ziada ili rekodi zisichanganywe.',closeP:'Funga bila kutuma',since:'Ilianza',noPlanned:'Hujapangiwa doria bado. Meneja atapanga.',draft:'Hifadhi kama rasimu',continueP:'Endelea na doria',drafts:'Rasimu na doria zilizo wazi',edit:'Hariri',del:'Futa',addFisher:'Ongeza mvuvi mwingine',others:'Wavuvi wengine kwenye ukaguzi huu',persons2:'Watu waliohusika',addPerson:'Ongeza mtu mwingine',unknown:'Watu hawajatambuliwa',pname:'Jina',lmmaQ:'Doria hii inaingia ndani ya Iweni LMMA',visitToday:'Ziara ya LMMA leo',visited:'Imefanyika',notYet:'Bado',streak:'siku mfululizo',noGps:'GPS haipatikani. Ruhusu eneo kwa POps kwenye mipangilio ya simu.',planned:'Umepangiwa',newPatrol:'Anza doria mpya',date:'Tarehe',obsT:'Uchunguzi',incT:'Matukio',savedOn:'Imehifadhiwa kwenye simu hii. Itatumwa ukipata mtandao.',pendingSend:'inasubiri kutumwa',submitted:'Doria imetumwa kwa ukaguzi'});
+const inOut=ll=>{const z=zoneAt(ll[0],ll[1]);return {in:!!z,zone:z?z.name:'Outside the Iweni LMMA'};};
+const SOS_KINDS=[['Medical or injury','Medical or injury'],['Boat problem','Boat problem or engine failure'],['Threat','Threat or violence'],['Lost or overdue','Lost or overdue'],['Other','Other emergency']];
+Object.assign(FT.en,{sos:'SOS',sosT:'Send emergency alert',sosWhat:'What is the emergency?',sosNote:'Details (optional)',sosSend:'Send SOS now',sosSent:'SOS sent. Stay calm and stay where it is safe.',sosQ:'Sending shares your phone location with the office and your team.',sosCancel:'False alarm, cancel it',sosSms:'Send by SMS instead',sosAck:'The office has seen your alert.',sosWait:'Waiting for the office to see it. If there is no signal it is sent as soon as the phone connects.',whereNow:'Where you are now',inside:'Inside the Iweni LMMA',outside:'Outside the Iweni LMMA',waitGps:'Finding your position…'});
+Object.assign(FT.sw,{sos:'DHARURA',sosT:'Tuma tahadhari ya dharura',sosWhat:'Dharura ni ipi?',sosNote:'Maelezo (si lazima)',sosSend:'Tuma DHARURA sasa',sosSent:'Dharura imetumwa. Tulia na ubaki mahali salama.',sosQ:'Kutuma kunashiriki mahali simu yako ilipo na ofisi na timu yako.',sosCancel:'Ni makosa, ighairi',sosSms:'Tuma kwa SMS badala yake',sosAck:'Ofisi imeona tahadhari yako.',sosWait:'Inasubiri ofisi kuona. Kama hakuna mtandao itatumwa simu ikipata mtandao.',whereNow:'Ulipo sasa',inside:'Ndani ya Iweni LMMA',outside:'Nje ya Iweni LMMA',waitGps:'Inatafuta mahali ulipo…'});
 const lsGet=(k,d)=>{try{const v=localStorage.getItem('pops-'+k);return v?JSON.parse(v):d;}catch(e){return d;}};
 const lsSet=(k,v)=>{try{localStorage.setItem('pops-'+k,JSON.stringify(v));}catch(e){}};
 const hhmm=()=>pad(new Date().getHours())+':'+pad(new Date().getMinutes());
@@ -13,7 +17,7 @@ const dateLabel=()=>stamp().split(',')[0];
 const thin=t=>{if(t.length<=1500)return t;const k=Math.ceil(t.length/1500);return t.filter((_,i)=>i%k===0||i===t.length-1);};
 const shrink=(file,max,q)=>new Promise((ok,no)=>{const r=new FileReader();r.onerror=()=>no(new Error('Could not read the photo'));r.onload=()=>{const im=new Image();im.onerror=()=>no(new Error('Could not open the photo'));im.onload=()=>{const m=max||800,k=Math.min(1,m/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',q||.55));};im.src=r.result;};r.readAsDataURL(file);});
 
-const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings})=>{
+const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings,sos,setSos})=>{
  const me=account?account.name:'';
  const [tab,setTab]=useState('home');const [scr,setScr]=useState('home');
  const [cid,setCid]=useState(()=>lsGet('cid',null));
@@ -21,6 +25,7 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
  const [online,setOnline]=useState(typeof navigator==='undefined'||navigator.onLine!==false);
  const [lang,setLangS]=useState(()=>lsGet('lang','en'));
  const [running,setRunning]=useState(false);
+ const [where,setWhere]=useState(null);const inRef=useRef(null);const posRef=useRef(null);const [sosId,setSosId]=useState(()=>lsGet('sosid',null));
  const last=useRef(null);const trackRef=useRef([]);const kmRef=useRef(0);const secRef=useRef(0);
  const cur=patrols.find(p=>p.id===cid)||null;
  const [alertMsg,setAlertMsg]=useState('');const curRef=useRef(null);curRef.current=cur;const alertAt=useRef({});const stgRef=useRef(settings);stgRef.current=settings;
@@ -48,11 +53,11 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
  useEffect(()=>{
   if(!running)return;
   if(!navigator.geolocation){setGpsErr(FT[lang].noGps);return;}
-  const id=navigator.geolocation.watchPosition(p=>{if(gpsBad.current){gpsBad.current=false;evAdd('gps_ok','GPS signal is back');}setGpsErr('');const ll=[p.coords.latitude,p.coords.longitude];setPos({lat:ll[0],lon:ll[1],acc:p.coords.accuracy});addPoint(ll);},e=>{if(!gpsBad.current){gpsBad.current=true;evAdd('gps_lost',e.code===1?'Location permission is off':'GPS signal lost');}setGpsErr(e.code===1?FT[lang].noGps:(e.message||'GPS not available'));},{enableHighAccuracy:true,maximumAge:2000,timeout:25000});
+  const id=navigator.geolocation.watchPosition(p=>{if(gpsBad.current){gpsBad.current=false;evAdd('gps_ok','GPS signal is back');}setGpsErr('');const ll=[p.coords.latitude,p.coords.longitude];setPos({lat:ll[0],lon:ll[1],acc:p.coords.accuracy});posRef.current={lat:ll[0],lon:ll[1],acc:p.coords.accuracy};addPoint(ll);const w=inOut(ll);setWhere({...w,at:Date.now()});const pv=inRef.current;if(pv===null)evAdd('where','Start position: '+(w.in?'inside the LMMA. ':'outside the LMMA. ')+w.zone);else if(pv!==w.in)evAdd(w.in?'enter':'exit',w.in?'Entered the Iweni LMMA':'Left the Iweni LMMA');inRef.current=w.in;},e=>{if(!gpsBad.current){gpsBad.current=true;evAdd('gps_lost',e.code===1?'Location permission is off':'GPS signal lost');}setGpsErr(e.code===1?FT[lang].noGps:(e.message||'GPS not available'));},{enableHighAccuracy:true,maximumAge:2000,timeout:25000});
   return()=>navigator.geolocation.clearWatch(id);
  },[running]);
  // keep the saved patrol up to date every 20 seconds while recording
- const flushTrack=()=>{if(!cid)return;upd(p=>({...p,track:thin(trackRef.current),km:Math.round(kmRef.current*100)/100,secs:secRef.current,seen:new Date().toISOString()}));};
+ const flushTrack=()=>{if(!cid)return;const pp=posRef.current;const nowRec=pp?{lat:pp.lat,lon:pp.lon,in:inOut([pp.lat,pp.lon]).in,zone:inOut([pp.lat,pp.lon]).zone,at:new Date().toISOString()}:null;upd(p=>({...p,track:thin(trackRef.current),km:Math.round(kmRef.current*100)/100,secs:secRef.current,seen:new Date().toISOString(),...(nowRec?{now:nowRec}:{})}));if(pp&&navigator.onLine!==false)api('POST','/pos',{lat:pp.lat,lon:pp.lon,acc:pp.acc,doing:'On patrol '+cid}).catch(()=>{});};
  useEffect(()=>{if(!running)return;const i=setInterval(flushTrack,20000);return()=>clearInterval(i);},[running,cid]);
  const load=p=>{trackRef.current=p.track||[];kmRef.current=p.km||0;secRef.current=p.secs||0;setTrack(trackRef.current);setKm(kmRef.current);setSec(secRef.current);last.current=trackRef.current[trackRef.current.length-1]||null;};
  const resume=p=>{setCid(p.id);load(p);if(p.status==='Active')evAdd('resume','App reopened. Recording continues.',p.id);if(p.status==='Active'||p.status==='Paused'){setScr('patrol');setRunning(p.status==='Active');}else setScr('done');};
@@ -64,8 +69,11 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
   let id;
   if(planned){id=planned.id;setPatrols(x=>x.map(p=>p.id===id?{...p,...base,rangers:p.rangers&&p.rangers.length?p.rangers:[me],leader:p.leader||me}:p));}
   else{id=newId('PT');const iso=localIso();setPatrols(x=>[{id,iso,date:dateLabel(),unplanned:true,leader:me,rangers:[me,...(pr.crew||[])],cox:pr.cox||'',bmu:(account&&account.bmu)||'pate',...base},...x]);}
-  trackRef.current=[];kmRef.current=0;secRef.current=0;last.current=null;setTrack([]);setKm(0);setSec(0);setGpsErr('');setCid(id);setRunning(true);setScr('patrol');log('Started patrol','Patrols',id);
+  inRef.current=null;trackRef.current=[];kmRef.current=0;secRef.current=0;last.current=null;setTrack([]);setKm(0);setSec(0);setGpsErr('');setCid(id);setRunning(true);setScr('patrol');log('Started patrol','Patrols',id);
  };
+ const getFix=()=>new Promise(ok=>{if(posRef.current)return ok(posRef.current);if(!navigator.geolocation)return ok(null);navigator.geolocation.getCurrentPosition(p=>ok({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy}),()=>ok(null),{enableHighAccuracy:true,timeout:8000,maximumAge:30000});});
+ const sendSos=async(kind,note)=>{const fix=await getFix();const rec={id:newId('SOS'),kind,note:note||'',by:me,byId:account?account.id:'',phone:(account&&account.phone)||'',lat:fix?fix.lat:null,lon:fix?fix.lon:null,acc:fix?Math.round(fix.acc||0):null,at:new Date().toISOString(),patrol:cidRef.current||'',zone:fix?inOut([fix.lat,fix.lon]).zone:'Position unknown',status:'Active'};setSos(l=>[rec,...l]);setSosId(rec.id);lsSet('sosid',rec.id);log('Sent SOS','Safety',rec.id);try{navigator.vibrate&&navigator.vibrate([300,100,300]);}catch(e){}return rec;};
+ const cancelSos=()=>{setSos(l=>l.map(x=>x.id===sosId?{...x,status:'Cancelled',closedAt:new Date().toISOString()}:x));setSosId(null);lsSet('sosid',null);};
  const togglePause=()=>{flushTrack();const n=!running;evAdd(n?'resume':'pause',n?'Patrol resumed':'Patrol paused');setRunning(n);upd(p=>({...p,status:n?'Active':'Paused'}));};
  const addObs=(o,i)=>{upd(p=>{const l=[...(p.obsList||[])];const rec={...o,id:o.id||newId('OB').toLowerCase(),ll:o.ll||last.current};if(i>=0)l[i]=rec;else l.push(rec);return {...p,obsList:l,obs:l.length};});if(i<0)evAdd('obs',o.type);setScr('patrol');toast('Observation saved');};
  const delObs=i=>upd(p=>{const l=(p.obsList||[]).filter((_,k)=>k!==i);return {...p,obsList:l,obs:l.length};});
@@ -97,8 +105,8 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
   }else{log('Saved patrol as draft','Patrols',p0.id);toast('Draft saved. Open it from Records to finish later.');}
   setCid(null);setRunning(false);setScr('home');setTab('home');
  };
- const locate=()=>{if(!navigator.geolocation){toast('This device has no GPS');return;}navigator.geolocation.getCurrentPosition(p=>{setPos({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy});},e=>toast('Location unavailable: '+(e.message||'permission denied')),{enableHighAccuracy:true,timeout:12000});};
- return {tab,setTab,scr,setScr,cur,cid,running,sec,km,track,pos,gpsErr,online,lang,setLang,begin,resume,park,myOpen,alertMsg,clearAlert:()=>setAlertMsg(''),togglePause,addObs,delObs,addInc,delInc,addEnc,delEnc,addPhoto,delPhoto,complete,finish,locate};
+ const locate=()=>{if(!navigator.geolocation){toast('This device has no GPS');return;}navigator.geolocation.getCurrentPosition(p=>{setPos({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy});posRef.current={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};setWhere({...inOut([p.coords.latitude,p.coords.longitude]),at:Date.now()});},e=>toast('Location unavailable: '+(e.message||'permission denied')),{enableHighAccuracy:true,timeout:12000});};
+ return {tab,setTab,scr,setScr,cur,cid,running,sec,km,track,pos,gpsErr,online,lang,setLang,begin,resume,park,myOpen,alertMsg,clearAlert:()=>setAlertMsg(''),togglePause,addObs,delObs,addInc,delInc,addEnc,delEnc,addPhoto,delPhoto,complete,finish,locate,where,sos,sosId,sendSos,cancelSos,posRef};
 };
 
 const PhotoPick=({fs,t})=>html`<label className="photobtn"><input type="file" accept="image/*" capture="environment" className="sr" onChange=${e=>{const f=e.target.files&&e.target.files[0];fs.addPhoto(f);e.target.value='';}}/><${Icon} n="camera" s=${22}/>${t('addPhoto')}</label>`;
@@ -109,6 +117,33 @@ const blankItem=()=>({name:'',unit:'Piece',qty:'',value:''});
 const blankCk=()=>({time:hhmm(),name:'',id:'',phone:'',others:[],gear:'Hand line',gearId:'',qty:'',ground:'',origin:'Pate',code:'',action:ACTIONS[0],details:'',seized:false,items:[blankItem()]});
 const blankInc=()=>({cat:INC_CATS[0],desc:'',date:localIso(),time:hhmm(),persons:[{name:'',id:'',phone:''}],unknown:false,code:''});
 const infOpts=()=>[['','None. Compliance check'],...(LOOK.infringements||[]).map(i=>[i.code,i.code+'. '+i.label])];
+
+const WhereNow=({fs,t,onKnown})=>{
+ useEffect(()=>{fs.locate();},[]);
+ useEffect(()=>{if(fs.where&&onKnown)onKnown(fs.where.in);},[fs.where&&fs.where.in]);
+ const w=fs.where;
+ return html`<div className=${'where '+(w?(w.in?'in':'out'):'wait')} role="status"><small>${t('whereNow')}</small><b>${w?(w.in?t('inside'):t('outside')):t('waitGps')}</b>${w&&html`<span>${w.zone}${fs.pos?' · '+fmtLL(fs.pos.lat,fs.pos.lon):''}${fs.pos&&fs.pos.acc?' · ±'+Math.round(fs.pos.acc)+' m':''}</span>`}<button type="button" className="link" onClick=${fs.locate}>Refresh</button></div>`;
+};
+const SosSheet=({fs,t,onClose,settings})=>{
+ const [kind,setKind]=useState(SOS_KINDS[0][0]);const [note,setNote]=useState('');const [busy,setBusy]=useState(false);
+ const mine=fs.sos.find(x=>x.id===fs.sosId);
+ const send=async()=>{setBusy(true);await fs.sendSos(kind,note);setBusy(false);};
+ const fix=fs.posRef.current;
+ const smsTo=(settings&&settings.sosPhone)||'';
+ const body=encodeURIComponent('SOS '+kind+' from '+(fs.sos[0]&&fs.sos[0].by||'ranger')+(fix?'. Location: '+fix.lat.toFixed(5)+','+fix.lon.toFixed(5)+' https://maps.google.com/?q='+fix.lat.toFixed(5)+','+fix.lon.toFixed(5):'. Location unknown')+(note?'. '+note:''));
+ return html`<div className="sosov" role="dialog" aria-modal="true" aria-label=${t('sosT')}><div className="sosbox">
+  <h2>${t('sosT')}</h2>
+  ${mine&&mine.status!=='Cancelled'?html`<div className=${'sosstat '+mine.status}><b>${mine.status==='Active'?t('sosSent'):mine.status==='Acknowledged'?t('sosAck'):'Resolved'}</b><p className="small">${mine.kind} · ${mine.lat!=null?fmtLL(mine.lat,mine.lon):'Position unknown'} · ${new Date(mine.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</p>${mine.status==='Active'&&html`<p className="small">${t('sosWait')}</p>`}${mine.ackBy&&html`<p className="small">Seen by ${mine.ackBy}</p>`}</div>
+   <div className="bgrid">${smsTo&&html`<a className="big" href=${'sms:'+smsTo+'?&body='+body}>${t('sosSms')}</a>`}<button type="button" className="big" onClick=${()=>{fs.cancelSos();}}>${t('sosCancel')}</button></div>
+   <button type="button" className="big" onClick=${onClose}>${t('back')}</button>`
+  :html`<p className="muted small">${t('sosQ')}</p><${WhereNow} fs=${fs} t=${t}/>
+   <label htmlFor="sos-k">${t('sosWhat')}</label><${Sel} id="sos-k" value=${kind} onChange=${setKind} opts=${SOS_KINDS}/>
+   <label htmlFor="sos-n">${t('sosNote')}</label><input id="sos-n" value=${note} onChange=${e=>setNote(e.target.value)}/>
+   <button type="button" className="big sosgo" disabled=${busy} onClick=${send}>${t('sosSend')}</button>
+   ${smsTo&&html`<a className="big" href=${'sms:'+smsTo+'?&body='+body}>${t('sosSms')}</a>`}
+   <button type="button" className="big" onClick=${onClose}>${t('cancel')}</button>`}
+ </div></div>`;
+};
 
 const FieldApp=({embedded})=>{
  const {fs,patrols,incidents,go,account,pwa,signOut,settings}=useApp();
@@ -122,7 +157,7 @@ const FieldApp=({embedded})=>{
  const inProg=mine.filter(p=>['Active','Paused'].includes(p.status)&&(p.leader===me||(p.rangers||[]).includes(me)));
  const {toast}=useApp();const auto=useRef(false);
  useEffect(()=>{if(embedded||auto.current||fs.cid||!inProg.length)return;auto.current=true;const a=inProg.slice().sort((x,y)=>((y.iso||'')+(y.start||'')).localeCompare((x.iso||'')+(x.start||'')))[0];fs.resume(a);toast(t('inProg')+': '+a.id);},[inProg.length,fs.cid]);
- const [of_,setOf_]=useState({id:'',type:'Marine wildlife',notes:'',time:hhmm()});const [oi,setOi]=useState(-1);
+ const [sosOpen,setSosOpen]=useState(false);const [of_,setOf_]=useState({id:'',type:'Marine wildlife',notes:'',time:hhmm()});const [oi,setOi]=useState(-1);
  const [inf,setInf]=useState(blankInc);const [ii,setIi]=useState(-1);
  const [ck,setCk]=useState(blankCk);const [ci,setCi]=useState(-1);
  const [pr,setPr]=useState({objective:'Surveillance',parts:{bmu:2,cfd:0,cps:0,kfs:0,kcg:0,kma:0,other:0},vessel:{name:'',type:'',hp:''},areas:['','',''],inLmma:true,cox:'',crew:[]});const [pl,setPl]=useState(null);
@@ -138,6 +173,7 @@ const FieldApp=({embedded})=>{
  const Lst=({title,rows})=>rows.length?html`<div className="lst"><h3 className="fa-h">${title}</h3>${rows.map((r,i)=>html`<div key=${i} className="arow"><span><b>${r[0]}</b><small>${r[1]}</small></span><span className="btnrow"><button type="button" className="btn small" onClick=${r[2]}>${t('edit')}</button><button type="button" className="btn small" onClick=${r[3]}>${t('del')}</button></span></div>`)}</div>`:null;
  if(fs.scr==='pre'){nav=false;const u=(k,v)=>setPr(o=>({...o,[k]:v}));body=html`<div className="fa-form"><h2>${t('before')}</h2>
   <label htmlFor="pr-o">${t('objective')}</label><${Sel} id="pr-o" value=${pr.objective} onChange=${v=>u('objective',v)} opts=${OBJECTIVES}/>
+  <${WhereNow} fs=${fs} t=${t} onKnown=${v=>u('inLmma',v)}/>
   <div className="rowx"><${Toggle} id="pr-l" on=${pr.inLmma} onChange=${v=>u('inLmma',v)} label=${t('lmmaQ')}/><label htmlFor="pr-l">${t('lmmaQ')}</label></div>
   <h3 className="fa-h">${t('participants')}</h3><div className="cnts">${AGENCIES.map(a=>html`<div key=${a[0]} className="cnt-r"><span>${a[1]}</span><${Cnt} v=${pr.parts[a[0]]||0} label=${a[1]} on=${v=>setPr(o=>({...o,parts:{...o.parts,[a[0]]:v}}))}/></div>`)}</div>
   <h3 className="fa-h">${t('vessel')}</h3>
@@ -149,6 +185,7 @@ const FieldApp=({embedded})=>{
   <div className="bgrid"><button type="button" className="big" onClick=${()=>fs.setScr('home')}>${t('cancel')}</button><button type="button" className="big go" onClick=${()=>fs.begin(pr,pl)}><${Icon} n="play" s=${22}/>${t('goPatrol')}</button></div></div>`;}
  else if(fs.scr==='patrol'&&cur){nav=false;body=html`<div className="fa-patrol">
   <div className="fa-mapbox"><${GeoMap} key="pm" layers=${['zones']} items=${[]} tracks=${[]} compact=${true} showLive=${false} myPos=${fs.pos} myTrack=${fs.track} follow=${true} height="100%"/></div>
+  ${fs.where&&html`<div className=${'where slim '+(fs.where.in?'in':'out')}><b>${fs.where.in?t('inside'):t('outside')}</b><span>${fs.where.zone}</span></div>`}
   <div className=${'gps '+(fs.running?'':'off')}><i/>${fs.running?t('gpsOn'):t('gpsPaused')}${fs.gpsErr&&html` <b>${fs.gpsErr}</b>`}</div>
   <div className="timer">${tm}</div>
   <div className="tstat"><span><b>${fs.km.toFixed(2)}</b>${t('km')}</span><span><b>${enc.length}</b>${t('checks')}</span><span><b>${enc.filter(e=>e.code).length}</b>${t('infrN')}</span><span><b>${(cur.seiz||[]).length}</b>${t('seizN')}</span></div>
@@ -221,11 +258,13 @@ const FieldApp=({embedded})=>{
   <h3 className="fa-h">${t('language')}</h3><${Seg} label="Language" value=${fs.lang} onChange=${fs.setLang} opts=${[['en','English'],['sw','Kiswahili']]}/>${fs.lang==='sw'&&html`<p className="small muted">Form labels use the wording printed on the BMU Patrol Reporting Form. Other Kiswahili text should be checked with the rangers.</p>`}
   <h3 className="fa-h">${t('gpsSource')}</h3><p className="small muted">This phone's GPS is used during a started patrol and stops when you pause or finish. Allow location for POps in your phone settings.</p>
   ${pwa&&(pwa.canInstall?html`<button type="button" className="big go" onClick=${pwa.install}><${Icon} n="download" s=${22}/>${t('install')}</button>`:pwa.standalone?html`<p className="small muted">Installed on this device.</p>`:pwa.ios?html`<p className="small muted">To install on iPhone: tap Share, then Add to Home Screen.</p>`:null)}
+  <h3 className="fa-h">How to use</h3>${GUIDE.filter(g=>['sos','patrol'].includes(g[0])).map(g=>html`<details key=${g[0]} className="fa-guide"><summary>${g[1]}</summary><ol>${g[2].map((x,i)=>html`<li key=${i}>${x}</li>`)}</ol></details>`)}
   <button type="button" className="btn" onClick=${signOut}><${Icon} n="out" s=${16}/>${t('signout')}</button>
   <p className="small muted">Records waiting to send stay on this phone until there is signal. Sign-out is blocked from clearing them. Sign in again on the same phone to finish sending.</p></div>`;}
  return html`<div className=${'fa '+(embedded?'emb':'full')}>
-  <header className="fa-top"><span className="fa-brand"><${Logo} s=${26}/>POps Field</span><span className="fa-st"><span className=${'netpill '+(fs.online?'':'off')}><${Icon} n=${fs.online?'wifi':'wifioff'} s=${14}/>${fs.online?t('online'):t('offline')}</span><span className=${'syncpill '+(pend?'pend':'ok')}>${pend?pend+' '+t('pending'):t('synced')}</span></span></header>
+  <header className="fa-top"><span className="fa-brand"><${Logo} s=${26}/>POps Field</span><button type="button" className=${'sosbtn '+(fs.sosId?'live':'')} onClick=${()=>setSosOpen(true)} aria-label=${t('sosT')}>${t('sos')}</button><span className="fa-st"><span className=${'netpill '+(fs.online?'':'off')}><${Icon} n=${fs.online?'wifi':'wifioff'} s=${14}/>${fs.online?t('online'):t('offline')}</span><span className=${'syncpill '+(pend?'pend':'ok')}>${pend?pend+' '+t('pending'):t('synced')}</span></span></header>
   ${fs.alertMsg&&html`<div className="fa-alert" role="alert"><span>${fs.alertMsg}</span><button type="button" aria-label="Dismiss" onClick=${fs.clearAlert}>×</button></div>`}
+  ${sosOpen&&html`<${SosSheet} fs=${fs} t=${t} settings=${settings} onClose=${()=>setSosOpen(false)}/>`}
   <div className="fa-body">${body}</div>
   ${nav&&html`<nav className="fa-nav" aria-label="Field navigation">${[['home','dashboard',t('home')],['map','map',t('map')],['records','reports',t('records')],['me','staff',t('me')]].map(n=>html`<button type="button" key=${n[0]} className=${fs.tab===n[0]&&!pv?'on':''} aria-current=${fs.tab===n[0]?'page':null} onClick=${()=>{setPv(null);fs.setTab(n[0]);}}><${Icon} n=${n[1]} s=${22}/><span>${n[2]}</span></button>`)}</nav>`}
  </div>`;

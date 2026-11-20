@@ -45,23 +45,22 @@ const MODS=[
  {id:'incidents',label:'Events & Incidents',icon:'incident',group:'Operations',fn:'Incident reporting and follow-up'},
  {id:'iweni-lmma',label:'Iweni LMMA Management',icon:'lmma',group:'Conservation',fn:'LMMA boundaries, zones and activities'},
  {id:'projects',label:'Conservation Projects',icon:'projects',group:'Conservation',fn:'Project workspaces and progress'},
- {id:'coral',label:'Coral Restoration',icon:'coral',group:'Conservation',fn:'Restoration and reef monitoring'},
  {id:'staff',label:'Staff & Users',icon:'staff',group:'Organisation',fn:'Staff records and user management'},
  {id:'bmus',label:'BMUs & Governance',icon:'bmus',group:'Organisation',fn:'BMU and Board records'},
  {id:'partners',label:'Stakeholders & Partners',icon:'partners',group:'Organisation',fn:'Partner management'},
  {id:'boats',label:'Boats & Equipment',icon:'boat',group:'Organisation',fn:'Assets, boats and maintenance'},
- {id:'tourism',label:'Tourism Management',icon:'tourism',group:'Income',fn:'Visitors, activities and payments'},
- {id:'finance',label:'Finance & Donations',icon:'finance',group:'Income',fn:'Income, expenditure and donations'},
+ {id:'tourism',label:'Tourism & Finance',icon:'finance',group:'Income',fn:'Visitors, boat fees, payments, donations and approval by the Board Chair'},
  {id:'import',label:'Import Paper Logs',icon:'reports',group:'Admin',fn:'Type or paste historical paper logs'},
  {id:'reports',label:'Reports & Documents',icon:'reports',group:'Insight',fn:'Reporting and document archive'},
  {id:'permissions',label:'Settings & Permissions',icon:'settings',group:'Admin',fn:'Roles and system settings'},
- {id:'audit',label:'Audit Trail',icon:'audit',group:'Admin',fn:'Activity and access history'}
+ {id:'audit',label:'Audit Trail',icon:'audit',group:'Admin',fn:'Activity and access history'},
+ {id:'guide',label:'Guide',icon:'reports',group:'Help',fn:'How to use POps, SOS and templates'}
 ];
 const ROLES={
  admin:{label:'Super Admin',sub:'CBO Manager / LMMA Manager',user:'',ini:'',
   mods:{dashboard:'w','live-map':'w',patrols:'w',incidents:'w','iweni-lmma':'w',projects:'w',coral:'w',staff:'w',bmus:'w',partners:'w',boats:'w',tourism:'w',finance:'w',reports:'w',import:'w',permissions:'w',audit:'r'}},
  board:{label:'Board Chairperson',sub:'Governance and oversight',user:'',ini:'',approver:true,
-  mods:{dashboard:'r','live-map':'r',incidents:'r','iweni-lmma':'r',projects:'r',bmus:'r',partners:'r',finance:'r',reports:'r'}},
+  mods:{dashboard:'r','live-map':'r',incidents:'r','iweni-lmma':'r',projects:'r',bmus:'r',partners:'r',tourism:'r',finance:'r',reports:'r'}},
  ranger:{label:'Marine Ranger',sub:'Field operations',user:'',ini:'',
   mods:{dashboard:'s','live-map':'s',patrols:'s',incidents:'s'}},
  cox:{label:'Coxswain',sub:'Boat operations',user:'',ini:'',
@@ -76,6 +75,13 @@ const ROLES={
   mods:{dashboard:'s',tourism:'w',finance:'w',reports:'s'}}
 };
 const BMUS=[{id:'pate',name:'Pate BMU'},{id:'ishakani',name:'Shanga Ishakani BMU'},{id:'rubu',name:'Shanga Rubu BMU'}];
+/* neighbouring BMUs. Used when a patrol is joint, in forms, and as map markers once an admin enters a position. */
+const OTHER_BMUS=[['lamu','Lamu BMU'],['shela','Shela BMU'],['mokowe','Mokowe BMU'],['mtangawanda','Mtangawanda BMU'],['faza','Faza BMU'],['tchundwa','Tchundwa BMU'],['kizingitini','Kizingitini BMU'],['ndau','Ndau BMU'],['mbwajumwali','Mbwajumwali BMU']];
+OTHER_BMUS.forEach(([id,name])=>BMUS.push({id,name,other:true}));
+/* BMUs an admin adds later (BMUs & Governance, other BMUs). Called whenever the saved list changes. */
+const applyBmuRows=rows=>{for(let i=BMUS.length-1;i>=0;i--)if(BMUS[i].custom)BMUS.splice(i,1);(rows||[]).filter(r=>r.kind==='bmu'&&r.name).forEach(r=>{const id=r.id;const ex=BMUS.find(b=>b.id===id);if(ex){if(r.lat&&r.lon){ex.lat=+r.lat;ex.lon=+r.lon;}return;}BMUS.push({id,name:/BMU$/i.test(r.name)?r.name:r.name+' BMU',other:true,custom:true,lat:+r.lat||null,lon:+r.lon||null});});
+ /* positions entered for the built-in neighbours */
+ (rows||[]).filter(r=>r.kind==='bmupos').forEach(r=>{const ex=BMUS.find(b=>b.id===r.bmu);if(ex&&r.lat&&r.lon){ex.lat=+r.lat;ex.lon=+r.lon;}});};
 const bmuName=id=>(BMUS.find(b=>b.id===id)||{}).name||'';
 
 /* ---------- projects ---------- */
@@ -104,15 +110,18 @@ const LAYERS=[
  {id:'activity',label:'Patrol activity',shape:'hex',color:'var(--c2)'},
  {id:'wildlife',label:'Marine wildlife',shape:'circ',color:'var(--c4)'},
  {id:'habitat',label:'Habitat observations',shape:'hex',color:'var(--warn)'},
- {id:'projects',label:'Conservation projects',shape:'flag',color:'var(--brand)'}
+ {id:'projects',label:'Conservation projects',shape:'flag',color:'var(--brand)'},
+ {id:'staff',label:'Staff and members',shape:'circ',color:'var(--brand)'},
+ {id:'sos',label:'SOS alerts',shape:'tri',color:'#c0262d'},
+ {id:'bmus',label:'Other BMUs',shape:'flag',color:'var(--c4)'}
 ];
 const LAYER_ACCESS={
- admin:['patrols','incidents','restoration','zones','boats','rangers','activity','wildlife','habitat','projects'],
- board:['patrols','incidents','restoration','zones','boats','rangers','wildlife','habitat','projects'],
- ranger:['patrols','incidents','zones','wildlife','habitat','boats','rangers','activity'],
- cox:['patrols','zones','boats','rangers'],
- officer:['restoration','zones','wildlife','habitat','projects'],
- fisheries:['patrols','zones','restoration','wildlife','habitat','projects','rangers','activity'],
+ admin:['patrols','incidents','restoration','zones','boats','rangers','activity','wildlife','habitat','projects','staff','sos','bmus'],
+ board:['patrols','incidents','restoration','zones','boats','rangers','wildlife','habitat','projects','staff','sos','bmus'],
+ ranger:['patrols','incidents','zones','wildlife','habitat','boats','rangers','activity','sos','bmus'],
+ cox:['patrols','zones','boats','rangers','sos','bmus'],
+ officer:['restoration','zones','wildlife','habitat','projects','sos','bmus'],
+ fisheries:['patrols','zones','restoration','wildlife','habitat','projects','rangers','activity','bmus'],
  bmu:['patrols','zones','projects'],
  tourfin:[]
 };
@@ -162,6 +171,6 @@ const NOTES={};
 const AUDIT0=[];
 
 /* what each role may save to the server (the server enforces the same table) */
-const COLL_W={patrols:['admin','ranger','cox'],incidents:['admin','ranger'],fin:['admin','tourfin','board'],tour:['admin','tourfin'],donors:['admin','tourfin'],fleet:['admin','cox'],vlog:['admin','cox'],projects:['admin'],projwork:['admin','officer'],coral:['admin','officer'],bmus:['admin'],partners:['admin'],assign:['admin'],settings:['admin']};
+const COLL_W={patrols:['admin','ranger','cox'],incidents:['admin','ranger'],fin:['admin','tourfin','board'],tour:['admin','tourfin'],donors:['admin','tourfin'],fleet:['admin','cox'],vlog:['admin','cox'],projects:['admin'],projwork:['admin','officer'],coral:['admin','officer'],bmus:['admin'],partners:['admin'],assign:['admin'],sos:['admin','ranger','cox','officer'],settings:['admin']};
 const ZONES_API=[];const PEOPLE=[];
 const LOOK={infringements:[],fees:[],rangers:[],coxswains:[],bmu:null,today:''};

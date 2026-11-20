@@ -17,9 +17,9 @@ const engSt=e=>{
  const since=r1(e.hrs-e.svcAt),left=r1(e.intervalH-since),due=addMonths(e.svcDate,e.intervalM),days=Math.round((due-TODAY)/864e5);
  let s='ok',why='';
  if(left<=0){s='over';why=since+' of '+e.intervalH+' h since the last service';}
- else if(days<=0){s='over';why='service date passed on '+fmtD(due);}
+ else if(days<=0&&since>0){s='over';why='service date passed on '+fmtD(due)+' and the engine has run '+since+' h since the last service';}
  else if(left<=e.warnH){s='soon';why='due in '+left+' h ('+since+' of '+e.intervalH+' h since the last service)';}
- else if(days<=e.warnD){s='soon';why='due on '+fmtD(due)+' ('+days+' days)';}
+ else if(days<=e.warnD&&since>0){s='soon';why='due on '+fmtD(due)+' ('+days+' days)';}
  return {since,left,due,days,s,why,pct:Math.max(0,Math.min(100,Math.round(since/e.intervalH*100)))};
 };
 const svcAlerts=(fleet,only)=>{const o=[];Object.keys(fleet).forEach(b=>{if(only&&!only.includes(b))return;fleet[b].engines.forEach(e=>{const s=engSt(e);if(s.s!=='ok')o.push({key:b+'|'+e.id+'|'+s.s,boat:b,s:s.s,text:b+', '+e.label+': '+(s.s==='over'?'service overdue, ':'service ')+s.why});});});return o;};
@@ -52,8 +52,39 @@ const EngineCard=({e,write,admin,onSvc,onCfg})=>{
  <div className="btnrow">${write&&html`<${Btn} kind="small primary" icon="check" onClick=${()=>onSvc(e)}>Record service</${Btn}>`}${admin&&html`<${Btn} kind="small" onClick=${()=>onCfg(e)}>Service settings</${Btn}>`}</div></${Card}>`;
 };
 
+/* Work done and fuel, worked out from patrols and the vessel log. The system, not a person, decides how hard the boat has been used. */
+const hoursOfPatrol=p=>{if(+p.secs>0)return p.secs/3600;const a=String(p.start||'').match(/^(\d{1,2}):(\d{2})/),b=String(p.end||'').match(/^(\d{1,2}):(\d{2})/);if(!a||!b)return 0;let h=(+b[1]+b[2]/60)-(+a[1]+a[2]/60);if(h<0)h+=24;return h;};
+const boatUsage=(name,patrols,vlog,days,now=Date.now())=>{
+ const from=isoD(new Date(now-days*864e5));
+ const ps=patrols.filter(p=>p.boat===name&&['Completed','Active','Paused'].includes(p.status)&&(p.iso||'')>=from);
+ const fuelP=ps.reduce((a,p)=>a+(+p.fuel||0),0);
+ const fuelV=vlog.filter(r=>r.boat===name&&!r.draft&&!r.patrol&&r.date>=from).reduce((a,r)=>a+(+r.fuel||0),0);
+ const hrs=ps.reduce((a,p)=>a+hoursOfPatrol(p),0),km=ps.reduce((a,p)=>a+(+p.km||0),0);
+ const fuel=fuelP+fuelV;
+ const all=patrols.filter(p=>p.boat===name&&['Completed','Active','Paused'].includes(p.status)).map(p=>p.iso||'').concat(vlog.filter(r=>r.boat===name&&!r.draft).map(r=>r.date)).filter(Boolean).sort();
+ const lastUse=all.length?all[all.length-1]:'';
+ const idle=lastUse?Math.floor((now-new Date(lastUse+'T12:00:00'))/864e5):null;
+ return {trips:ps.length,hrs:r1(hrs),km:r1(km),fuel:r1(fuel),lph:hrs>0.5&&fuel>0?r1(fuel/hrs):null,lpk:km>1&&fuel>0?Math.round(fuel/km*100)/100:null,lastUse,idle};
+};
+const Usage=({boat,fb,patrols,vlog,settings})=>{
+ const heavyH=+(settings&&settings.heavyHrs14)||30,idleD=+(settings&&settings.idleDays)||14;
+ const u14=boatUsage(boat,patrols,vlog,14),u60=boatUsage(boat,patrols,vlog,60),u30=boatUsage(boat,patrols,vlog,30);
+ const notes=[];
+ if(u14.hrs>=heavyH)notes.push(['crit','Heavy use: '+u14.hrs+' h in the last 14 days. Service will come sooner than the calendar.']);
+ if(u14.trips===0&&(u14.idle==null||u14.idle>=idleD))notes.push(['warn',u14.idle==null?'No trips recorded for this boat yet.':'Idle for '+u14.idle+' days. Run the engine and check fuel, battery and the hull before the next patrol. Service is not counted as due just because time passed.']);
+ if(u60.lph&&u14.lph&&u14.hrs>=2&&u14.lph>u60.lph*1.4)notes.push(['warn','Fuel use per hour is '+Math.round((u14.lph/u60.lph-1)*100)+'% above the 60-day average. Check for a leak, a fouled hull or fuel taken out.']);
+ if(u14.fuel>0&&u14.trips===0)notes.push(['warn','Fuel was recorded ('+u14.fuel+' L) but no trip was recorded in the last 14 days.']);
+ const perDay=u30.hrs/30;
+ const engs=(fb.engines||[]).map(e=>{const st=engSt(e);const eta=perDay>0.02&&st.left>0?Math.ceil(st.left/perDay):null;return {e,st,eta};});
+ return html`<${Card} title="Work done and fuel" sub="Worked out by the system from patrols and the vessel log. Nothing to enter by hand." right=${html`<${Chip} t=${notes.some(n=>n[0]==='crit')?'Heavy use':u14.trips?'In use':'Idle'} tone=${notes.some(n=>n[0]==='crit')?'crit':u14.trips?'good':'warn'}/>`}>
+ <div className="kpis small"><${Kpi} label="Trips, last 14 days" value=${String(u14.trips)}/><${Kpi} label="Hours run, 14 days" value=${String(u14.hrs)}/><${Kpi} label="Distance, 14 days" value=${u14.km+' km'}/><${Kpi} label="Fuel, 14 days" value=${u14.fuel+' L'} note=${u14.lph?u14.lph+' L per hour':'No fuel and hours pair yet'}/><${Kpi} label="Last used" value=${u14.lastUse?(u14.idle===0?'Today':u14.idle+' d ago'):'Never'} note=${u14.lastUse||''}/></div>
+ ${notes.map((n,i)=>html`<${Notice} key=${i} tone=${n[0]==='crit'?'warn':'info'} title=${n[0]==='crit'?'Overworked':'Check'}>${n[1]}</${Notice}>`)}
+ ${engs.length>0&&html`<ul className="sharelist">${engs.map(({e,st,eta})=>html`<li key=${e.id}><span>${e.label}: ${st.since} of ${e.intervalH} h since the last service</span><b>${eta?'At the last 30 days of use, service in about '+eta+' day'+(eta===1?'':'s'):st.left>0?'Not used lately, so no service date is forced':'Service now'}</b></li>`)}</ul>`}
+ <small className="muted">Service is decided by hours run and work done. The calendar only counts once the engine has actually run since the last service. Limits: heavy use at ${heavyH} h in 14 days, idle check after ${idleD} days (Settings & Permissions).</small></${Card}>`;
+};
+
 const Boats=()=>{
- const {role,can,log,toast,fleet,setFleet,vlog,setVlog,patrols}=useApp();
+ const {role,can,log,toast,fleet,setFleet,vlog,setVlog,patrols,settings}=useApp();
  VLOG_ALL=vlog;
  const me=ROLES[role].user;const pwa=!!window.POPS_PWA;
  const boats=role==='cox'?BOATS.filter(b=>b.cox===me):BOATS;
@@ -121,6 +152,7 @@ const Boats=()=>{
  <${Card} title=${'Vessel log: '+boat} right=${html`<div className="btnrow"><${Sel} id="wk" aria-label="Week" value=${ws} onChange=${setWk} opts=${(weeks.length?weeks:[ws]).map(w=>[w,'Week of '+weekLabel(w)])}/>${pwa?html`<${Btn} kind="small" icon="download" onClick=${prt}>Print or save as PDF</${Btn}><${Btn} kind="small" icon="download" onClick=${csv}>CSV</${Btn}>`:null}</div>`}>
   ${!pwa&&html`<p className="muted small">Print, PDF and CSV work in the installed app link.</p>`}
   <div className="pp-wrap" ref=${host}><${VesselLog} boat=${boat} eng=${eng} rows=${rows} ws=${ws}/></div></${Card}>
+ <${Usage} boat=${boat} fb=${fb} patrols=${patrols} vlog=${vlog} settings=${settings}/>
  ${drafts.length>0&&html`<${Card} title="Draft log entries" sub="Saved but not submitted. Engine hours are not updated until you submit."><${Table} cols=${[{h:'Date',k:'date'},{h:'Departure',k:'dep'},{h:'Arrival',k:'arr'},{h:'Comments',k:'note'},{h:'',k:'a',r:r=>html`<span className="btnrow"><button className="link" onClick=${()=>{setF({...blank(),...r,m:{...(r.m||{})}});setMk(true);}}>Edit</button><button className="link" onClick=${()=>{setVlog(l=>l.filter(x=>x.id!==r.id));toast('Draft deleted');}}>Delete</button></span>`}]} rows=${drafts}/></${Card}>`}
 
  </div>`}

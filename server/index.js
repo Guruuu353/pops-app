@@ -32,7 +32,7 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
     const u = one('SELECT * FROM users WHERE id=?', p[0]);
     return u && u.active && u.token_version === +p[1] ? u : null;
   };
-  const pub = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, role_label: ROLES[u.role], county: u.county, subcounty: u.subcounty, bmu: u.bmu || '', active: !!u.active, must_change: !!u.must_change, last_login: u.last_login, created_at: u.created_at });
+  const pub = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, role_label: ROLES[u.role], county: u.county, subcounty: u.subcounty, bmu: u.bmu || '', phone: u.phone || '', title: u.title || '', emergency_name: u.emergency_name || '', emergency_phone: u.emergency_phone || '', active: !!u.active, must_change: !!u.must_change, last_login: u.last_login, created_at: u.created_at });
 
   const tries = new Map();
   const throttled = (k) => { const now = Date.now(); const a = (tries.get(k) || []).filter((t) => now - t < 15 * 60e3); tries.set(k, a); return a.length >= 8; };
@@ -100,14 +100,25 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
   // lookups for forms
   R('GET', '/api/lookups', true, ({ user }) => ({
     infringements: q('SELECT code,category,label,paper FROM infringements WHERE active=1 ORDER BY category,code'),
-    fees: q('SELECT code,label,currency,amount FROM fees WHERE active=1'),
+    fees: q('SELECT code,label,currency,amount,per FROM fees WHERE active=1'),
     projects: q("SELECT id,name,partner FROM projects WHERE status='active' ORDER BY name"),
     boats: q('SELECT * FROM boats WHERE active=1 ORDER BY name'),
-    rangers: q("SELECT id,name FROM users WHERE active=1 AND role='ranger' ORDER BY name"),
-    coxswains: q("SELECT id,name FROM users WHERE active=1 AND role='cox' ORDER BY name"),
+    rangers: q("SELECT id,name,phone,title FROM users WHERE active=1 AND role='ranger' ORDER BY name"),
+    coxswains: q("SELECT id,name,phone,title FROM users WHERE active=1 AND role='cox' ORDER BY name"),
     bmu: db.getSetting('bmu'), points: db.getSetting('points'), compliance: db.getSetting('compliance'), roles: ROLES,
     today: nairobiNow().date,
   }));
+
+  R('PUT', '/api/fees/:code', true, ({ user, params, body }) => {
+    if (!['admin', 'tourfin'].includes(user.role)) throw forbid('Only the administrator or the Tourism and Finance Officer can change prices');
+    const code = String(params.code).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40); if (!code) throw bad('Invalid code');
+    const label = String(body.label || '').trim(); if (!label) throw bad('Enter a name for the price');
+    const amount = +body.amount; if (!isFinite(amount) || amount < 0) throw bad('Enter the amount');
+    const cur = body.currency === 'USD' ? 'USD' : 'KES'; const per = ['guest', 'boat', 'group'].includes(body.per) ? body.per : 'guest';
+    run('INSERT INTO fees(code,label,currency,amount,per,active) VALUES(?,?,?,?,?,?) ON CONFLICT(code) DO UPDATE SET label=excluded.label,currency=excluded.currency,amount=excluded.amount,per=excluded.per,active=excluded.active', code, label, cur, amount, per, body.active === false ? 0 : 1);
+    audit(user, 'fee_saved', 'fee', code, { label, amount, cur, per });
+    return { fees: q('SELECT code,label,currency,amount,per FROM fees WHERE active=1') };
+  });
 
   // ---- admin: users ----
   const adminOnly = (u) => { if (u.role !== 'admin') throw forbid('Administrators only'); };
@@ -121,7 +132,7 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
     const e = PW_RULE(body.temp_password); if (e) throw bad(e);
     if (one('SELECT 1 FROM users WHERE email=?', email)) throw new HttpError(409, 'A user with that email already exists');
     const id = uid();
-    run('INSERT INTO users(id,name,email,role,county,subcounty,bmu,pw_hash,must_change,created_at) VALUES(?,?,?,?,?,?,?,?,1,?)', id, name, email, body.role, body.county || '', body.subcounty || '', body.bmu || '', hashPw(body.temp_password), nowIso());
+    run('INSERT INTO users(id,name,email,role,county,subcounty,bmu,phone,title,emergency_name,emergency_phone,pw_hash,must_change,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1,?)', id, name, email, body.role, body.county || '', body.subcounty || '', body.bmu || '', String(body.phone || '').trim(), String(body.title || '').trim(), String(body.emergency_name || '').trim(), String(body.emergency_phone || '').trim(), hashPw(body.temp_password), nowIso());
     for (const pid of body.project_ids || []) if (one('SELECT 1 FROM projects WHERE id=?', pid)) run('INSERT OR IGNORE INTO project_members VALUES(?,?)', pid, id);
     audit(user, 'user_created', 'user', id, { email, role: body.role });
     return { user: pub(one('SELECT * FROM users WHERE id=?', id)) };
@@ -131,8 +142,8 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
     const u = one('SELECT * FROM users WHERE id=?', params.id); if (!u) throw nf();
     if (body.role && !ROLE_KEYS.includes(body.role)) throw bad('Unknown role');
     if (u.id === user.id && (body.active === false || (body.role && body.role !== 'admin'))) throw bad('You cannot deactivate or demote your own account');
-    const f = { name: body.name ?? u.name, role: body.role ?? u.role, county: body.county ?? u.county, subcounty: body.subcounty ?? u.subcounty, bmu: body.bmu ?? u.bmu ?? '', active: body.active === undefined ? u.active : body.active ? 1 : 0 };
-    run('UPDATE users SET name=?,role=?,county=?,subcounty=?,bmu=?,active=?,token_version=token_version+? WHERE id=?', f.name, f.role, f.county, f.subcounty, f.bmu, f.active, f.active ? 0 : 1, u.id);
+    const f = { name: body.name ?? u.name, role: body.role ?? u.role, county: body.county ?? u.county, subcounty: body.subcounty ?? u.subcounty, bmu: body.bmu ?? u.bmu ?? '', phone: body.phone ?? u.phone ?? '', title: body.title ?? u.title ?? '', emergency_name: body.emergency_name ?? u.emergency_name ?? '', emergency_phone: body.emergency_phone ?? u.emergency_phone ?? '', active: body.active === undefined ? u.active : body.active ? 1 : 0 };
+    run('UPDATE users SET name=?,role=?,county=?,subcounty=?,bmu=?,phone=?,title=?,emergency_name=?,emergency_phone=?,active=?,token_version=token_version+? WHERE id=?', f.name, f.role, f.county, f.subcounty, f.bmu, f.phone, f.title, f.emergency_name, f.emergency_phone, f.active, f.active ? 0 : 1, u.id);
     if (Array.isArray(body.project_ids)) { run('DELETE FROM project_members WHERE user_id=?', u.id); for (const pid of body.project_ids) run('INSERT OR IGNORE INTO project_members VALUES(?,?)', pid, u.id); }
     audit(user, 'user_updated', 'user', u.id, body);
     return { user: pub(one('SELECT * FROM users WHERE id=?', u.id)) };
@@ -417,8 +428,25 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
     fleet:     { r: ['admin', 'board', 'cox', 'ranger', 'fisheries'], w: ['admin', 'cox'] },
     assign:    { r: ['admin', 'officer'], w: ['admin'] },
     equip:     { r: ['admin', 'cox'], w: ['admin', 'cox'] },
+    sos:       { r: ['admin', 'board', 'ranger', 'cox', 'officer'], w: ['admin', 'ranger', 'cox', 'officer'] },
     settings:  { r: ['admin', 'board', 'ranger', 'cox', 'officer', 'fisheries', 'bmu', 'tourfin'], w: ['admin'] },
   };
+  // live positions of staff (admin, officers, rangers): one row per user, kept only for the latest fix and a short trail
+  R('POST', '/api/pos', true, ({ user, body }) => {
+    const lat = +body.lat, lon = +body.lon;
+    if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw bad('Invalid position');
+    const prev = one("SELECT data FROM docs WHERE coll='pos' AND id=?", user.id);
+    let trail = []; try { trail = (JSON.parse(prev.data).trail || []).slice(-39); } catch (e) {}
+    const now = nowIso(); trail.push([lat, lon, now]);
+    const d = JSON.stringify({ id: user.id, name: user.name, role: user.role, phone: user.phone || '', lat, lon, acc: +body.acc || 0, doing: String(body.doing || '').slice(0, 60), at: now, trail });
+    run("INSERT INTO docs(coll,id,data,author_id,created_at,updated_at) VALUES('pos',?,?,?,?,?) ON CONFLICT(coll,id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at", user.id, d, user.id, now, now);
+    return { ok: true };
+  });
+  R('GET', '/api/pos', true, ({ user }) => {
+    if (!['admin', 'board'].includes(user.role)) throw forbid();
+    const cutoff = Date.now() - 12 * 3600e3;
+    return { staff: q("SELECT data FROM docs WHERE coll='pos'").map((r) => JSON.parse(r.data)).filter((x) => Date.parse(x.at) > cutoff) };
+  });
   const collOf = (name, user, mode) => { const c = COLL[name]; if (!c) throw nf('Unknown collection'); if (!c[mode].includes(user.role)) throw forbid('Your role cannot ' + (mode === 'w' ? 'change' : 'view') + ' this'); return c; };
   R('GET', '/api/docs', true, ({ user, query }) => {
     const out = {}; const only = query && query.only ? String(query.only).split(',') : null; // ?only=patrols,incidents for light live refreshes

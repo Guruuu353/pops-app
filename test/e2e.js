@@ -10,7 +10,7 @@ const { start, browser, login } = require('./harness');
   check('admin dashboard has no demo text', !/sample|demo|Hamisi|Mlinzi|Nguru/i.test(await ap.innerText('body')));
   await ap.goto(S.base + '/#staff'); await ap.waitForSelector('text=Staff & Users');
   await ap.click('button:has-text("Add user")');
-  await ap.fill('#sn', 'Amina Hassan'); await ap.fill('#se', 'amina@test.org'); await ap.selectOption('#sr', 'ranger');
+  await ap.fill('#sn', 'Amina Hassan'); await ap.fill('#se', 'amina@test.org'); await ap.fill('#sph', '0712345678'); await ap.selectOption('#sr', 'ranger');
   await ap.click('button:has-text("Create account")'); await ap.waitForSelector('text=Temporary sign-in');
   const shown = await ap.innerText('.notice .mono, .mono'); const pw = shown.split('/')[1].trim();
   const u = (await S.call('GET', '/users', null, S.adminToken)).users.find(x => x.email === 'amina@test.org');
@@ -68,11 +68,11 @@ const { start, browser, login } = require('./harness');
   // tourism and finance: one role, entry type choice, draft
   const T = await B.open(S.base); const tp = T.page;
   await login(tp, S.base, 'tourfin@test.org', 'Start2026', 'Pass2026word');
-  await tp.goto(S.base + '/#tourism'); await tp.click('button:has-text("New entry")');
+  await tp.goto(S.base + '/#tourism'); await tp.click('button:has-text("New visitor entry")');
   check('entry form offers tourist and finance choice', await tp.isVisible('button:has-text("Finance entry")') && await tp.isVisible('button:has-text("Tourist or visitor entry")'));
   await tp.fill('#tn', 'Group A'); await tp.selectOption('#tvt', 'bmu'); await tp.fill('#tg', '3'); await tp.click('.modal button:has-text("Save as draft")'); await tp.waitForTimeout(900);
   let tr = await docs('tour'); check('visitor draft saved with type BMU and no guide', tr.length === 1 && tr[0].vtype === 'bmu' && tr[0].status === 'Draft' && tr[0].guide === '');
-  await tp.click('button:has-text("New entry")'); await tp.click('button:has-text("Finance entry")'); await tp.fill('#fd', 'Fuel'); await tp.fill('#fa', '5000'); await tp.click('.modal button:has-text("Submit for approval")'); await tp.waitForTimeout(900);
+  await tp.click('.tabs button:has-text("Ledger"), [role=tab]:has-text("Ledger"), button:has-text("Ledger")'); await tp.click('button:has-text("New finance entry")'); await tp.click('.modal button:has-text("Finance entry")'); await tp.fill('#fd', 'Fuel'); await tp.fill('#fa', '5000'); await tp.click('.modal button:has-text("Submit for approval")'); await tp.waitForTimeout(900);
   check('finance entry submitted from the same role', (await docs('fin')).length === 1 && (await docs('fin'))[0].status === 'Submitted');
   // history import: two paper rows -> one patrol, one incident
   await ap.goto(S.base + '/#import'); await ap.waitForSelector('text=Import paper logs'); await ap.click('button:has-text("Paste from Excel")');

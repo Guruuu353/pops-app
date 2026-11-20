@@ -1,5 +1,5 @@
 /* ============ app shell ============ */
-const VIEWS={dashboard:Dashboard,'live-map':LiveMap,patrols:Patrols,incidents:Incidents,'iweni-lmma':Lmma,projects:Projects,coral:Coral,staff:Staff,bmus:Bmus,partners:Partners,boats:Boats,tourism:Tourism,finance:Finance,reports:Reports,import:Import,permissions:Permissions,audit:Audit};
+const VIEWS={dashboard:Dashboard,'live-map':LiveMap,patrols:Patrols,incidents:Incidents,'iweni-lmma':Lmma,projects:Projects,coral:Coral,staff:Staff,bmus:Bmus,partners:Partners,boats:Boats,tourism:Income,reports:Reports,import:Import,guide:Guide,permissions:Permissions,audit:Audit};
 const modFromHash=()=>{const h=(location.hash||'').replace('#','');return MODS.some(m=>m.id===h)?h:'dashboard';};
 const useWidth=()=>{const [w,setW]=useState(window.innerWidth);useEffect(()=>{const f=()=>setW(window.innerWidth);window.addEventListener('resize',f);return()=>window.removeEventListener('resize',f);},[]);return w;};
 
@@ -32,12 +32,38 @@ const Toasts=({toasts})=>html`<div className="toasts" role="status" aria-live="p
 const initials=n=>String(n||'?').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
 const normProj=p=>({code:String(p.name||'').split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,4),lead:'',progress:0,budget:0,spent:0,loc:'',due:'',obj:[],tasks:[],miles:[],updates:[],docs:[],...p});
 
+/* Emergency alerts from rangers on patrol. Shown above every screen until someone acknowledges and resolves them. */
+const SosBanner=()=>{
+ const {sos,setSos,account,openAt,role}=useApp();
+ const act=sos.filter(x=>['Active','Acknowledged'].includes(x.status));
+ const beeped=useRef({});
+ useEffect(()=>{act.filter(x=>x.status==='Active'&&!beeped.current[x.id]).forEach(x=>{beeped.current[x.id]=1;try{const C=window.AudioContext||window.webkitAudioContext;const c=new C();const o=c.createOscillator();o.frequency.value=880;o.connect(c.destination);o.start();setTimeout(()=>{o.stop();c.close();},700);navigator.vibrate&&navigator.vibrate([300,150,300]);}catch(e){}});},[act.map(x=>x.id+x.status).join()]);
+ useEffect(()=>{document.body.classList.toggle('has-sos',act.length>0);return()=>document.body.classList.remove('has-sos');},[act.length]);
+ if(!act.length)return null;
+ const upd=(id,f)=>setSos(l=>l.map(x=>x.id===id?{...x,...f}:x));
+ const canAct=['admin','officer'].includes(role);
+ return html`<div className="sosbar" role="alert">${act.map(x=>html`<div key=${x.id} className=${'sosrow '+x.status}><div><strong>SOS · ${x.by}</strong><span>${x.kind}${x.note?' · '+x.note:''}</span><small>${new Date(x.at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} · ${x.lat!=null?fmtLL(x.lat,x.lon)+' · '+x.zone:'Position unknown'}${x.phone?' · '+x.phone:''}</small></div>
+  <div className="sosact">${x.phone&&html`<a className="btn small" href=${'tel:'+x.phone}>Call</a>`}${x.lat!=null&&html`<button className="btn small" onClick=${()=>openAt('live-map',x.id,{sos:true})}>Show on map</button>`}${canAct&&x.status==='Active'&&html`<button className="btn small primary" onClick=${()=>upd(x.id,{status:'Acknowledged',ackBy:account.name,ackAt:new Date().toISOString()})}>I have seen it</button>`}${canAct&&html`<button className="btn small" onClick=${()=>upd(x.id,{status:'Resolved',resolvedBy:account.name,closedAt:new Date().toISOString()})}>Resolved</button>`}</div></div>`)}</div>`;
+};
+
+/* Office staff can share where they are (going for checks, visiting fishers). Only the Super Admin and the Board see it. */
+const ShareLoc=()=>{
+ const {account,toast}=useApp();
+ const [on,setOn]=useState(()=>{try{return localStorage.getItem('pops-share')==='1';}catch(e){return false;}});
+ const [doing,setDoing]=useState(()=>{try{return localStorage.getItem('pops-doing')||'In the office';}catch(e){return 'In the office';}});
+ const [open,setOpen]=useState(false);
+ const doRef=useRef(doing);doRef.current=doing;
+ useEffect(()=>{if(!on||!navigator.geolocation)return;let lastT=0;const id=navigator.geolocation.watchPosition(p=>{const n=Date.now();if(n-lastT<45000)return;lastT=n;api('POST','/pos',{lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy,doing:doRef.current}).catch(()=>{});},()=>{},{enableHighAccuracy:true,maximumAge:10000,timeout:30000});return()=>navigator.geolocation.clearWatch(id);},[on]);
+ const set=v=>{setOn(v);try{localStorage.setItem('pops-share',v?'1':'0');}catch(e){}toast(v?'Sharing your location with the Super Admin':'Location sharing is off');};
+ return html`<span className="shareloc"><button className=${'btn small '+(on?'primary':'')} aria-expanded=${open} onClick=${()=>setOpen(o=>!o)}><${Icon} n="map" s=${15}/>${on?'Sharing location':'Share location'}</button>${open&&html`<div className="sharepop"><label className="rowx"><input type="checkbox" checked=${on} onChange=${e=>set(e.target.checked)}/> Share my location while this app is open</label><label htmlFor="shd">What I am doing</label><select id="shd" value=${doing} onChange=${e=>{setDoing(e.target.value);try{localStorage.setItem('pops-doing',e.target.value);}catch(x){}}}>${['In the office','Going for checks','Visiting fishers','Looking up a case','At the LMMA','Meeting a partner','Other field work'].map(o=>html`<option key=${o}>${o}</option>`)}</select><small>Only the Super Admin and the Board can see this. Stops when you switch it off or close the app.</small></div>`}</span>`;
+};
+
 const App=()=>{
  const [user,setUser]=useState(undefined);       // undefined = checking session, null = signed out
  const [ready,setReady]=useState(false);const [loadErr,setLoadErr]=useState('');
  const role=user?user.role:'ranger';const bmuId=(user&&user.bmu)||'pate';
  const [h,setH]=useState(location.hash);
- const mod=(()=>{const x=h.replace('#','');return MODS.some(m=>m.id===x)?x:'dashboard';})();
+ const mod=(()=>{const x0=h.replace('#','');const x=x0==='finance'?'tourism':x0==='coral'?'projects':x0;return MODS.some(m=>m.id===x)?x:'dashboard';})();
  const [settings,setSettings,loadSettings]=useColl('settings',{bmuDl:true,fishDl:false,piiBmu:false},0,!!user&&user.role==='admin');
  const [assign,setAssign,loadAssign]=useColl('assign',{},0,!!user&&user.role==='admin');
  const wr=c=>!!user&&COLL_W[c]&&COLL_W[c].includes(user.role);
@@ -51,6 +77,11 @@ const App=()=>{
  const [work,setWork,loadWork]=useColl('projwork',[],0,wr('projwork'));
  const [coral,setCoral,loadCoral]=useColl('coral',[],0,wr('coral'));
  const [bmuRows,setBmuRows,loadBmus]=useColl('bmus',[],0,wr('bmus'));
+ const [sos,setSos,loadSos]=useColl('sos',[],0,wr('sos'));
+ const focusRef=useRef(null);const [tick2,setTick2]=useState(0);
+ useEffect(()=>{applyBmuRows(bmuRows);},[bmuRows]);
+ useEffect(()=>{if(settings.jcmaName)JCMA_NAME=settings.jcmaName;},[settings.jcmaName]);
+ useEffect(()=>{applyEdge(settings.edge1112);setTick2(n=>n+1);},[JSON.stringify(settings.edge1112||[])]);
  const [partners,setPartners,loadPartners]=useColl('partners',[],0,wr('partners'));
  const [donors,setDonors,loadDonors]=useColl('donors',[],0,wr('donors'));
  const [audit,setAudit]=useState([]);const vl=settings.verified||[];const setVl=fn=>setSettings(s=>({...s,verified:fn(s.verified||[])}));const [people,setPeople]=useState([]);
@@ -58,26 +89,28 @@ const App=()=>{
  const [toasts,setToasts]=useState([]);const [nav,setNav]=useState(false);const [notif,setNotif]=useState(false);
  const [installEv,setInstallEv]=useState(!!window.__pwaPrompt);const [online,setOnline]=useState(navigator.onLine);const [pend,setPend]=useState(ob.list().length);
  const vw=useWidth();
- const go=id=>{try{location.hash=id;}catch(e){}setH('#'+id);setNav(false);setNotif(false);window.scrollTo(0,0);};
- const can=m=>(user&&ROLES[role].mods[m])||null;
+ const go0=id=>{id=id==='finance'?'tourism':id==='coral'?'projects':id;try{location.hash=id;}catch(e){}setH('#'+id);setNav(false);setNotif(false);window.scrollTo(0,0);};
+ const can=m=>m==='guide'?(user?'r':null):(user&&ROLES[role].mods[m])||null;
  const log=(a,m,r)=>setAudit(x=>[[stamp(),user?user.name:'',a,m,r],...x]);
  const toast=msg=>{const id=Date.now()+Math.random();setToasts(t=>[...t,{id,msg}]);setTimeout(()=>setToasts(t=>t.filter(k=>k.id!==id)),4200);};
- const fs=useFieldStore({patrols,setPatrols,setIncidents,log,toast,account:user,settings});
+ const fs=useFieldStore({patrols,setPatrols,setIncidents,log,toast,account:user,settings,sos,setSos});
  const signOut=()=>{tokSet(null);try{localStorage.removeItem('pops-outbox');}catch(e){}setUser(null);setReady(false);};
  // session check at start
  useEffect(()=>{(async()=>{if(!tokGet())return setUser(null);try{setUser((await api('GET','/me')).user);}catch(e){setUser(e.status===0&&tokGet()?undefined:null);}})();const so=()=>setUser(null);window.addEventListener('pops-signed-out',so);return()=>window.removeEventListener('pops-signed-out',so);},[]);
  const applyDocs=docs=>{
    if(docs.patrols)loadPatrols(fromDocs(docs.patrols).map(normPatrol));if(docs.incidents)loadInc(fromDocs(docs.incidents).map(normInc));if(docs.fin)loadFin(fromDocs(docs.fin));if(docs.tour)loadTour(fromDocs(docs.tour));
-   if(docs.fleet)loadFleet(fromDocs(docs.fleet,true));if(docs.vlog)loadVlog(fromDocs(docs.vlog));if(docs.projects)loadProj(fromDocs(docs.projects));if(docs.projwork)loadWork(fromDocs(docs.projwork));if(docs.coral)loadCoral(fromDocs(docs.coral));if(docs.bmus)loadBmus(fromDocs(docs.bmus));if(docs.partners)loadPartners(fromDocs(docs.partners));if(docs.donors)loadDonors(fromDocs(docs.donors));if(docs.assign)loadAssign(fromDocs(docs.assign,true));
+   if(docs.fleet)loadFleet(fromDocs(docs.fleet,true));if(docs.vlog)loadVlog(fromDocs(docs.vlog));if(docs.projects)loadProj(fromDocs(docs.projects));if(docs.projwork)loadWork(fromDocs(docs.projwork));if(docs.coral)loadCoral(fromDocs(docs.coral));if(docs.bmus){const br=fromDocs(docs.bmus);applyBmuRows(br);loadBmus(br);}if(docs.partners)loadPartners(fromDocs(docs.partners));if(docs.donors)loadDonors(fromDocs(docs.donors));if(docs.sos)loadSos(fromDocs(docs.sos));if(docs.assign)loadAssign(fromDocs(docs.assign,true));
    if(docs.settings)loadSettings({bmuDl:true,fishDl:false,piiBmu:false,...fromDocs(docs.settings,true)});
  };
  const [synced,setSynced]=useState(null);const busyRef=useRef(false);busyRef.current=!!(fs.cur&&['Active','Paused'].includes(fs.cur.status));
  // keep screens current: pick up what others saved (a patrol planned by the admin, a new user, etc.)
  useEffect(()=>{
   if(!user||user.must_change||!ready)return;
-  const pull=async(light)=>{if(busyRef.current||document.hidden||!navigator.onLine)return;try{const r=await ob.flush();if(r.left)return;const {docs}=await api('GET','/docs'+(light===true?'?only=patrols,incidents,vlog,fleet':''));if(busyRef.current)return;applyDocs(docs);setSynced(new Date());if(light===true)return;try{const lk=await api('GET','/lookups');LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains;}catch(e){}if(['admin','board'].includes(user.role)){try{setPeople((await api('GET','/users')).users);}catch(e){}}}catch(e){}};
-  const t=setInterval(pull,60000);const t2=setInterval(()=>pull(true),10000);window.POPS_PULL=()=>pull();const vis=()=>{if(!document.hidden)pull();};document.addEventListener('visibilitychange',vis);window.addEventListener('online',pull);
-  return()=>{clearInterval(t);clearInterval(t2);document.removeEventListener('visibilitychange',vis);window.removeEventListener('online',pull);};
+  const pull=async(light)=>{if(busyRef.current||document.hidden||!navigator.onLine)return;try{const r=await ob.flush();if(r.left)return;const {docs}=await api('GET','/docs'+(light===true?'?only=patrols,incidents,vlog,fleet,sos':''));if(busyRef.current)return;applyDocs(docs);setSynced(new Date());if(light===true)return;try{const lk=await api('GET','/lookups');LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains;}catch(e){}if(['admin','board'].includes(user.role)){try{setPeople((await api('GET','/users')).users);}catch(e){}}}catch(e){}};
+  const t=setInterval(pull,60000);const t2=setInterval(()=>pull(true),10000);
+  /* emergency alerts are checked every 8 seconds, even while a patrol is being recorded, so a ranger sees the office has answered and the office sees a new SOS quickly */
+  const t3=setInterval(async()=>{if(document.hidden||!navigator.onLine)return;try{const r=await ob.flush();if(r.left)return;const {docs}=await api('GET','/docs?only=sos');if(docs.sos)loadSos(fromDocs(docs.sos));}catch(e){}},8000);window.POPS_PULL=()=>pull();const vis=()=>{if(!document.hidden)pull();};document.addEventListener('visibilitychange',vis);window.addEventListener('online',pull);
+  return()=>{clearInterval(t);clearInterval(t2);clearInterval(t3);document.removeEventListener('visibilitychange',vis);window.removeEventListener('online',pull);};
  },[user&&user.id,ready]);
  // load everything this person may see, once signed in
  useEffect(()=>{
@@ -104,9 +137,22 @@ const App=()=>{
  const standalone=!!(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||!!navigator.standalone;
  const pwa=window.POPS_PWA?{canInstall:installEv&&!standalone,standalone,ios:/iphone|ipad|ipod/i.test(navigator.userAgent),install:async()=>{const e=window.__pwaPrompt;if(!e)return;e.prompt();try{await e.userChoice;}catch(x){}window.__pwaPrompt=null;setInstallEv(false);}}:null;
  const me=user?user.name:'';
- const ctx={synced,role,bmuId,user:me,account:user,go,can,log,toast,settings,setSettings,assign,setAssign,patrols,setPatrols,incidents,setIncidents,fin,setFin,tour,setTour,audit,vl,setVl,projOpen,setProjOpen,projects,setProjects,work,setWork,coral,setCoral,bmuRows,setBmuRows,partners,setPartners,donors,setDonors,people,setPeople,fs,pwa,signOut,fleet,setFleet,vlog,setVlog};
+ const go=id=>{go0(id);};
+ const openAt=(m,id,extra)=>{focusRef.current={mod:m,id,...(extra||{})};go0(m);};
+ const ctx={sos,setSos,openAt,focusRef,synced,role,bmuId,user:me,account:user,go,can,log,toast,settings,setSettings,assign,setAssign,patrols,setPatrols,incidents,setIncidents,fin,setFin,tour,setTour,audit,vl,setVl,projOpen,setProjOpen,projects,setProjects,work,setWork,coral,setCoral,bmuRows,setBmuRows,partners,setPartners,donors,setDonors,people,setPeople,fs,pwa,signOut,fleet,setFleet,vlog,setVlog};
  const myBoats=BOATS.filter(b=>b.cox===me).map(b=>b.name);
- const notes=[...(['admin','fisheries'].includes(role)?progressAlerts(patrols,settings).map(a=>a.kind+': '+a.text):[]),...(role==='admin'||role==='cox'?svcAlerts(fleet,role==='cox'?myBoats:null).map(a=>'Service alert: '+a.text):[]),...(role==='admin'?patrols.filter(p=>p.review==='Pending review').length?[patrols.filter(p=>p.review==='Pending review').length+' patrol review(s) waiting']:[]:[]),...(['admin','board'].includes(role)&&fin.filter(f=>f.status==='Submitted').length?[fin.filter(f=>f.status==='Submitted').length+' finance entr'+(fin.filter(f=>f.status==='Submitted').length>1?'ies':'y')+' awaiting approval']:[])];
+ const sosActive=sos.filter(x=>['Active','Acknowledged'].includes(x.status));
+ const pendRev=patrols.filter(p=>p.review==='Pending review').length,pendFin=fin.filter(f=>f.status==='Submitted').length;
+ const notes=[
+  ...(['admin','board','officer','cox','ranger'].includes(role)?sosActive.map(x=>({id:'sos-'+x.id+x.status,tone:'crit',kind:'SOS',text:x.by+': '+x.kind+(x.lat!=null?' · '+fmtLL(x.lat,x.lon):''),act:()=>openAt('live-map',x.id,{sos:true})})):[]),
+  ...(['admin','fisheries'].includes(role)?progressAlerts(patrols,settings).map(a=>({id:a.id,tone:a.level==='crit'?'crit':a.level==='info'?'info':'warn',kind:a.kind,text:a.text,act:()=>openAt('patrols',a.patrol.id)})):[]),
+  ...(role==='admin'||role==='cox'?svcAlerts(fleet,role==='cox'?myBoats:null).map(a=>({id:'svc-'+a.key,tone:a.s==='over'?'crit':'warn',kind:'Service',text:a.text,act:()=>go('boats')})):[]),
+  ...(role==='admin'&&pendRev?[{id:'rev-'+pendRev,tone:'warn',kind:'Review',text:pendRev+' patrol review'+(pendRev>1?'s':'')+' waiting',act:()=>openAt('patrols',null,{status:'Completed'})}]:[]),
+  ...(['admin','board'].includes(role)&&pendFin?[{id:'fin-'+pendFin,tone:'info',kind:'Approval',text:pendFin+' finance entr'+(pendFin>1?'ies':'y')+' awaiting approval by the Board Chairperson',act:()=>go('finance')}]:[])];
+ const [seen,setSeen]=useState(()=>{try{return JSON.parse(localStorage.getItem('pops-seen')||'[]');}catch(e){return [];}});
+ const markSeen=ids=>{setSeen(o=>{const n=[...new Set([...o,...ids])].slice(-200);try{localStorage.setItem('pops-seen',JSON.stringify(n));}catch(e){}return n;});};
+ const unseen=notes.filter(n=>!seen.includes(n.id)||n.tone==='crit').length;
+ useEffect(()=>{if(!notif)return;const k=e=>{if(e.key==='Escape')setNotif(false);};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k);},[notif]);
  const dark=()=>{const a=document.documentElement.getAttribute('data-theme');return a==='dark'||(a!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);};
  const [,force]=useState(0);
  const theme=()=>{document.documentElement.setAttribute('data-theme',dark()?'light':'dark');force(n=>n+1);};
@@ -127,11 +173,14 @@ const App=()=>{
  </aside>
  <div className="main">
   <header className="top"><button className="iconbtn menu" aria-label="Open menu" onClick=${()=>setNav(true)}><${Icon} n="menu"/></button>
-   <div className="topr">${!online&&html`<span className="chip warn"><i/>Offline</span>`}${pend>0&&html`<span className="chip warn"><i/>${pend} waiting to send</span>`}${pwa&&pwa.canInstall&&html`<button className="btn small primary" onClick=${pwa.install}><${Icon} n="download" s=${15}/>Install app</button>`}
-   <div className="notifwrap"><button className="iconbtn" aria-label="Notifications" aria-expanded=${notif} onClick=${()=>setNotif(o=>!o)}><${Icon} n="bell"/>${notes.length>0&&html`<b className="dotn">${notes.length}</b>`}</button>${notif&&html`<div className="pop" role="menu"><h4>Notifications</h4><ul>${notes.length?notes.map(n=>html`<li key=${n}>${n}</li>`):html`<li>Nothing needs your attention.</li>`}</ul><small>Alerts follow your permissions.</small></div>`}</div>
+   <div className="topr">${['admin','officer','fisheries','board'].includes(role)&&html`<${ShareLoc}/>`}${!online&&html`<span className="chip warn"><i/>Offline</span>`}${pend>0&&html`<span className="chip warn"><i/>${pend} waiting to send</span>`}${pwa&&pwa.canInstall&&html`<button className="btn small primary" onClick=${pwa.install}><${Icon} n="download" s=${15}/>Install app</button>`}
+   <button className="iconbtn bellbtn" aria-label=${'Notifications'+(unseen?', '+unseen+' need attention':'')} aria-expanded=${notif} onClick=${()=>setNotif(o=>!o)}><${Icon} n="bell"/>${unseen>0&&html`<b className="dotn">${unseen}</b>`}</button>
    <button className="iconbtn" aria-label="Switch light or dark theme" onClick=${theme}><${Icon} n=${dark()?'sun':'moon'}/></button></div></header>
+  ${notif&&html`<div className="notifscrim" onClick=${()=>setNotif(false)}/><section className="notifpanel" role="dialog" aria-label="Notifications"><header><h4>Notifications</h4><span><button className="link" onClick=${()=>markSeen(notes.map(n=>n.id))}>Mark all read</button><button className="iconbtn" aria-label="Close notifications" onClick=${()=>setNotif(false)}>×</button></span></header>
+   <ul>${notes.length?notes.map(n=>html`<li key=${n.id} className=${(seen.includes(n.id)&&n.tone!=='crit'?'read ':'')+n.tone}><button onClick=${()=>{markSeen([n.id]);setNotif(false);n.act();}}><${Chip} t=${n.kind} tone=${n.tone}/><span>${n.text}</span><${Icon} n="chev" s=${14}/></button></li>`):html`<li className="none">Nothing needs your attention.</li>`}</ul><small>Tap an item to open it. Alerts follow your permissions.</small></section>`}
+  ${['admin','board','officer','cox'].includes(role)&&html`<${SosBanner}/>`}
   <main id="content">${can(mod)?html`<${View} key=${role+bmuId+mod}/>`:html`<div key=${role+mod}><${PageHead} title=${m.label} sub=${m.fn}/><${Denied} mod=${m.label} role=${role}/></div>`}</main>
-  <footer className="foot"><${Logo} s=${32}/><span><b>Patte Conservation</b> · Iweni Locally Managed Marine Area, Pate Island, Lamu, Kenya · POps, Patte Operations Platform</span></footer>
+  <footer className="foot"><${Logo} s=${28}/><div><b>Patte Conservation CBO</b><small>Iweni Locally Managed Marine Area · Pate Island, Lamu, Kenya</small><small>POps · Patte Operations Platform</small></div></footer>
  </div>
  <${Toasts} toasts=${toasts}/>
  </div></${Ctx.Provider}>`;

@@ -1,7 +1,8 @@
 # POps – Patte Operations Platform
 
 The approved POps demo screens (all modules, installable Ranger PWA, paper-style forms and documents, vessel log, real maps) running on a real backend. No demo or sample content: every list starts empty and is filled by real users.
-
+-2.209474, 41.006465
+-2.207765, 41.013368
 ## Run locally
     export POPS_ADMIN_EMAIL=you@patteconservation.com POPS_ADMIN_PASSWORD='choose-a-long-one'
     bash web/build.sh            # builds web/dist (bash + node only)
@@ -55,3 +56,17 @@ Figure 1 / KML of the zones, the remaining log pages, the default ranger, and th
 - Each import is a batch (Imported batches card). An admin can remove a batch and import it again.
 - "Outside LMMA" patrols no longer count as daily LMMA visits.
 - Tests: `node --no-warnings test/map.js && node --no-warnings test/import-files.js`.
+
+## Update 3 (Nov 2026)
+
+- **SOS**: red SOS button on every ranger screen. It sends name, phone, patrol and GPS position (queued offline, plus an SMS fallback to the number set in Settings). The Super Admin, Board and officers get a red bar, beep and a Call / Show on map / "I have seen it" / Resolved action. Alerts are polled every 8 s.
+- **Where am I**: Start patrol shows inside/outside the Iweni LMMA from GPS. The inside-LMMA count uses recorded coordinates (live position, then track); the typed area name is only used for records with no coordinates (paper imports). Crossing the edge is written to the patrol timeline.
+- **Joint or single patrols** (Admin chooses): joint alerts after 30 min of silence, single after 2 h (up to 3 h). Per patrol and in Settings. Joint patrols pick other BMUs.
+- **Boats**: "Work done and fuel" card is computed from patrols and the vessel log (hours, km, fuel, L/h, idle days, heavy use, projected service date). Calendar service only counts once the engine has run since the last service.
+- **Tourism & Finance** is one module. Reconciling a visitor payment sends a finance entry to the Board Chairperson. Prices can be per person, per group or per boat (speedboat, dhow, power boat start at 0 until the admin sets them in Prices). Guest reports show guests, nationality, activity and boats.
+- **BMUs & Governance**: profiles lose community, next meeting and patrols; several representatives; Structure and Management added; BMU certificate moved here from Iweni LMMA. Other BMUs (Lamu, Shela, Mokowe, Mtangawanda, Faza, Tchundwa, Kizingitini, Ndau, Mbwajumwali) can be edited, given map positions, or added.
+- **Users** have phone (required), job title and emergency contact; the BMU representative role is no longer offered.
+- **Notifications** panel is fixed and never clipped; every item opens what it is about. Dashboard cards and the "Live now" list open patrols.
+- **Map**: rotation (buttons, Q/E, two-finger twist), compass (tap = north up, double-tap = follow phone), full screen, layers for staff, SOS and other BMUs. The south edge (point 11 to 12) can be traced along the shore in Iweni LMMA > Zones.
+- **Guide** module with SOS, patrol, import and map instructions and downloadable CSV templates.
+- Tests: `node --no-warnings test/turn3.js` added.

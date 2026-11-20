@@ -65,6 +65,8 @@ function open(file) {
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
   try { db.exec("ALTER TABLE users ADD COLUMN bmu TEXT DEFAULT ''"); } catch (e) { /* column already there */ }
+  try { db.exec("ALTER TABLE fees ADD COLUMN per TEXT NOT NULL DEFAULT 'guest'"); } catch (e) { /* column already there */ }
+  for (const c of ['phone', 'title', 'emergency_name', 'emergency_phone', 'national_id_note']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT DEFAULT ''`); } catch (e) { /* column already there */ } }
   const get = (k, d) => { const r = db.prepare('SELECT value FROM settings WHERE key=?').get(k); return r ? JSON.parse(r.value) : d; };
   const set = (k, v) => db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, JSON.stringify(v));
   db.getSetting = get; db.setSetting = set;
@@ -99,6 +101,12 @@ function seed(db, { adminEmail, adminPassword } = {}) {
     let note = ''; try { note = (JSON.parse(row.feature).properties || {}).note || ''; } catch (e) {}
     if (/convex hull|^Placeholder|^Hull of|^Built from the supplied coordinate table in order/i.test(note))
       db.prepare('UPDATE zones SET name=?,feature=?,updated_at=? WHERE id=?').run(z.name, JSON.stringify(z.feature), nowIso(), z.id);
+  }
+  // boat fees: some visitors pay per boat. Prices are left at 0 so the admin enters the real amounts.
+  if (!db.getSetting('boatFeesSeeded')) {
+    for (const [code, label] of [['boat-speed', 'Speedboat, per boat'], ['boat-dhow', 'Dhow, per boat'], ['boat-power', 'Power boat, per boat']])
+      db.prepare("INSERT OR IGNORE INTO fees(code,label,currency,amount,per) VALUES(?,?,?,?,'boat')").run(code, label, 'KES', 0);
+    db.setSetting('boatFeesSeeded', true);
   }
   if (!db.getSetting('landmarks')) db.setSetting('landmarks', ref.LANDMARKS);
   const n = db.prepare('SELECT COUNT(*) c FROM users').get().c;

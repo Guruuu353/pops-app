@@ -56,7 +56,7 @@ const Chip=({t,tone,dot=true})=>html`<span className=${'chip '+(tone||TONE[t]||'
 
 const PageHead=({title,sub,children})=>html`<div className="pagehead"><div><h1>${title}</h1>${sub&&html`<p>${sub}</p>`}</div><div className="pagehead-actions">${children}</div></div>`;
 const Card=({title,sub,right,children,className=''})=>html`<section className=${'card '+className}>${(title||right)&&html`<header className="card-h"><div><h2>${title}</h2>${sub&&html`<p>${sub}</p>`}</div>${right}</header>`}<div className="card-b">${children}</div></section>`;
-const Kpi=({label,value,note,tone})=>html`<div className="kpi"><span className="kpi-l">${label}</span><strong className="kpi-v">${value}</strong>${note&&html`<span className=${'kpi-n '+(tone||'')}>${note}</span>`}</div>`;
+const Kpi=({label,value,note,tone,onClick})=>html`<${onClick?'button':'div'} type=${onClick?'button':undefined} onClick=${onClick} className=${'kpi'+(onClick?' kpi-click':'')}><span className="kpi-l">${label}</span><strong className="kpi-v">${value}</strong>${note&&html`<span className=${'kpi-n '+(tone||'')}>${note}</span>`}</${onClick?'button':'div'}>`;
 const Btn=({children,onClick,kind='',icon,disabled,title,type='button',id})=>html`<button id=${id} type=${type} className=${'btn '+kind} onClick=${onClick} disabled=${disabled} title=${title}>${icon&&html`<${Icon} n=${icon} s=${16}/>`}${children}</button>`;
 const Toggle=({on,onChange,label,id})=>html`<button id=${id} type="button" role="switch" aria-checked=${on} aria-label=${label} className=${'toggle '+(on?'on':'')} onClick=${()=>onChange(!on)}><i/><span>${on?'ON':'OFF'}</span></button>`;
 const Notice=({tone='info',title,children})=>html`<div className=${'notice '+tone}><strong>${title}</strong><span>${children}</span></div>`;
