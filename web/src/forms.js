@@ -62,6 +62,7 @@ const fillForm=p0=>{
  p.partnerLine=[...(p.agencies||[]).map(k=>(AGENCIES.find(a=>a[0]===k)||[k,k])[1]),...(p.partnersOther||[])].join(', ');
  p.areas=(p.areas&&p.areas.filter(Boolean).length)?p.areas:[p.area].filter(Boolean);
  if(!(p.enc||[]).length){const li=incFor(p);if(li.length){let n=0;p.enc=li.flatMap(i=>{const r=incToEnc(i,n);n+=r.length;return r;});}}
+ if(!p.chal||typeof p.chal!=='object'||Array.isArray(p.chal)){if(typeof p.chal==='string'&&p.chal.trim()&&!p.challenges)p.challenges=p.chal;p.chal={};}
  if(p.imported){const ch={...(p.chal||{})};if(p.challenges&&!/^(none|nil|no|n\/a)\b/i.test(p.challenges)&&!Object.values(ch).some(Boolean)){ch.other=true;ch.otherText=p.challenges;}p.chal=ch;if(!p.prep||!p.prep.name)p.prep={...(p.prep||{}),name:p.leader,desig:'Marine Ranger',date:p.date};}
  return p;
 };
@@ -72,7 +73,7 @@ const withForm=p=>{const d=formDefaults(p);for(const k in d)if(!(k in p))p[k]=d[
 const mkSeizure=(e,items,p,n)=>{const st=staffOf(p.leader);return {no:'SZ-'+p.id.slice(-4)+'-'+n,encNo:e.n,items,person:{name:e.name,nat:'Kenyan',id:e.id,date:p.date,sign:null},officer:{name:p.leader,desig:st.title||'Marine Ranger',pno:st.no||'',station:bmuName(p.bmu),date:p.date,sign:null},loc:{district:p.county,town:e.ground,road:'At sea'},time:e.time};};
 const mcsRows=p=>{const g={};(p.enc||[]).filter(e=>e.code).forEach(e=>{(g[e.code]=g[e.code]||[]).push(e);});const ops=sumParts(p);
  return Object.keys(g).map(c=>{const es=g[c],x=(p.mcsx&&p.mcsx[c])||{},conf=es.filter(e=>e.seized||/confiscat/i.test(e.action||''));
-  return {code:c,suspects:new Set(es.map(e=>e.name)).size,convicts:x.convicts||0,fines:x.fines||0,items:conf.map(e=>e.gear).join(', '),qty:conf.reduce((a,e)=>a+(+e.qty||0),0)||'',type:infName(c),times:x.times||1,pros:x.pros||'No',fuel:p.fuel||'',ops,remarks:Object.keys(p.chal||{}).filter(k=>p.chal[k]).map(k=>k==='other'&&p.chal.otherText?p.chal.otherText:CHAL[k][0]).join(', ')};});};
+  return {code:c,suspects:new Set(es.map(e=>e.name)).size,convicts:x.convicts||0,fines:x.fines||0,items:conf.map(e=>e.gear).join(', '),qty:conf.reduce((a,e)=>a+(+e.qty||0),0)||'',type:infName(c),times:x.times||1,pros:x.pros||'No',fuel:p.fuel||'',ops,remarks:Object.keys(CHAL).filter(k=>(p.chal||{})[k]).map(k=>k==='other'&&p.chal.otherText?p.chal.otherText:CHAL[k][0]).join(', ')};});};
 
 /* ---- helpers: print and export (work in the hosted app, not in the preview page) ---- */
 const printNode=el=>{if(!el)return;let h=document.getElementById('printroot');if(!h){h=document.createElement('div');h.id='printroot';document.body.appendChild(h);}h.innerHTML=el.outerHTML;document.body.classList.add('printing');const done=()=>{document.body.classList.remove('printing');h.innerHTML='';window.removeEventListener('afterprint',done);};window.addEventListener('afterprint',done);setTimeout(()=>{try{window.print();}catch(e){done();}},60);};

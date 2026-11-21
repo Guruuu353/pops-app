@@ -47,7 +47,7 @@ const { start, browser, login } = require('./harness');
   check('visitor entry has typed vessel, registration, movement, other BMU', t.vessel === 'Mihreen' && t.vreg === 'LFB 3817' && t.fromBmu === 'shela' && t.toOther === 'Siyu' && t.bmuOther === 'Kiunga', JSON.stringify(t).slice(0, 300));
   check('receipt stored with the record', t.rcpt && t.rcpt.url, JSON.stringify(t.rcpt || {}).slice(0, 80));
   // imported patrol fills the forms from the entry log
-  await S.call('PUT', '/docs/patrols/IMP-1', { data: { id: 'IMP-1', iso: '2025-05-19', date: '19 May 2025', leader: 'Ali Shee', rangers: ['Ali Shee'], bmu: 'pate', start: '16:00', end: '18:30', status: 'Completed', imported: true, challenges: 'No boundary markers', observations: 'Fishermen inside', action: 'Awareness' } }, S.adminToken);
+  await S.call('PUT', '/docs/patrols/IMP-1', { data: { id: 'IMP-1', iso: '2025-05-19', date: '19 May 2025', leader: 'Ali Shee', rangers: ['Ali Shee'], bmu: 'pate', start: '16:00', end: '18:30', status: 'Completed', imported: true, challenges: 'No boundary markers', chal: { weather: true, otherText: 'Rough sea' }, observations: 'Fishermen inside', action: 'Awareness' } }, S.adminToken);
   await S.call('PUT', '/docs/incidents/IMPI-1', { data: { id: 'IMPI-1', iso: '2025-05-19', date: '19 May 2025', time: '17:00', cat: 'Infringement', imported: true, patrol: '—', code: 'H1', personsList: [{ name: 'Said Omar', id: '', phone: '' }], persons: 'Said Omar', desc: 'Stone collecting', action: 'Warning', loc: 'Inside the LMMA', stage: 0 } }, S.adminToken);
   await ap.goto(S.base + '/#patrols'); await ap.waitForSelector('text=Patrols & Field Activities'); await ap.waitForTimeout(12000);
   await ap.click('text=IMP-1').catch(() => {}); await ap.waitForTimeout(500);
@@ -58,7 +58,7 @@ const { start, browser, login } = require('./harness');
   const hb = await ap.evaluate(() => { const h = document.querySelector('.pp-head'), l = document.querySelector('.pp-logo'); if (!h || !l) return null; const a = h.getBoundingClientRect(), b = l.getBoundingClientRect(); return { rule: a.bottom, logo: b.bottom }; });
   check('logo sits above the header rule', hb && hb.logo <= hb.rule - 1, JSON.stringify(hb));
   // imported patrol: MCS form opens, admin can edit rows
-  await ap.click('button:has-text("MCS"), [role=tab]:has-text("MCS")').catch(() => {});
+  await ap.click('button:has-text("MCS"), [role=tab]:has-text("MCS")'); await ap.waitForTimeout(600); check('MCS shows the imported infringement and challenge', /H1\. Stone/.test(await ap.innerText('.paper')) && /Bad weather/.test(await ap.innerText('.paper')));
   await ap.waitForTimeout(400);
   check('MCS form of an imported patrol opens without crashing', !(await ap.locator('text=Something went wrong').count()) && (A.errs || []).every((e) => !/reading '0'/.test(e)), (A.errs || []).join('|').slice(0, 200));
   await ap.keyboard.press('Escape');
