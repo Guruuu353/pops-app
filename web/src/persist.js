@@ -13,21 +13,65 @@ const api=async(method,path,body)=>{
 const encJ=v=>JSON.stringify(v,function(k,x){const raw=this[k];return raw instanceof Date?{$d:raw.toISOString()}:x;});
 const decJ=v=>{if(Array.isArray(v))return v.map(decJ);if(v&&typeof v==='object'){if(v.$d)return new Date(v.$d);const o={};for(const k in v)o[k]=decJ(v[k]);return o;}return v;};
 
-/* queue of writes that could not be sent yet (no signal at sea). Sent in order when the connection returns. */
+/* small key-value store in IndexedDB. It holds what does not fit in localStorage (big records with photos) and the last copy of the data, so the app can open with no signal. */
+const idb={
+ db:null,
+ open(){if(this.db)return this.db;this.db=new Promise((ok,no)=>{try{const r=indexedDB.open('pops-kv',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);}catch(e){no(e);}});return this.db;},
+ async get(k){try{const d=await this.open();return await new Promise((ok,no)=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error);});}catch(e){return undefined;}},
+ async set(k,v){try{const d=await this.open();return await new Promise((ok,no)=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>ok(true);t.onerror=()=>no(t.error);});}catch(e){return false;}}
+};
+/* queue of writes that could not be sent yet (no signal at sea). Sent in order when the connection returns.
+   - kept in memory, mirrored to localStorage and, if that is full, to IndexedDB, so a big record is never silently lost
+   - one send at a time; records saved while a send is running are kept
+   - a record the server refuses (too large, not allowed) is kept in a separate "needs attention" list instead of blocking the rest */
 const ob={
- list(){try{return JSON.parse(localStorage.getItem(OKEY)||'[]');}catch(e){return [];}},
- save(a){try{localStorage.setItem(OKEY,JSON.stringify(a));}catch(e){}window.dispatchEvent(new Event('pops-outbox'));},
- push(op){const a=this.list().filter(x=>!(x.coll===op.coll&&x.id===op.id));a.push(op);this.save(a);},
+ mem:null,busy:null,full:false,
+ _read(){try{return JSON.parse(localStorage.getItem(OKEY)||'[]');}catch(e){return [];}},
+ list(){if(!this.mem)this.mem=this._read();return this.mem;},
+ retry(){return this.list().filter(x=>!x.error);},
+ failed(){return this.list().filter(x=>x.error);},
+ save(a){this.mem=a;let ok=true;try{localStorage.setItem(OKEY,JSON.stringify(a));this.full=false;}catch(e){ok=false;}
+  if(!ok){this.full=true;try{localStorage.setItem(OKEY,JSON.stringify(a.map(x=>x.del?x:{coll:x.coll,id:x.id,big:1})));}catch(e){}}
+  idb.set('outbox',a);window.dispatchEvent(new Event('pops-outbox'));},
+ /* on start: add anything the IndexedDB copy holds that localStorage lost */
+ async recover(){const s=await idb.get('outbox');if(!Array.isArray(s)||!s.length)return;const cur=this.list();const have=new Map(cur.map(x=>[x.coll+'/'+x.id,x]));let ch=false;s.forEach(x=>{const k=x.coll+'/'+x.id;const h=have.get(k);if(!h||(h.big&&x.data)){have.set(k,x);ch=true;}});if(ch)this.save([...have.values()]);},
+ push(op){const a=this.list().filter(x=>!(x.coll===op.coll&&x.id===op.id));a.push({...op,at:Date.now()});this.save(a);},
+ discard(op){this.save(this.list().filter(x=>!(x.coll===op.coll&&x.id===op.id&&x.at===op.at)));},
+ clearErrors(){this.save(this.list().map(x=>{const {error,...r}=x;return r;}));},
  async flush(){
-  const a=this.list();if(!a.length)return {sent:0,left:0};const left=[];let stop=false;
-  for(const op of a){
-   if(stop){left.push(op);continue;}
-   try{if(op.del)await api('DELETE','/docs/'+op.coll+'/'+encodeURIComponent(op.id));else await api('PUT','/docs/'+op.coll+'/'+encodeURIComponent(op.id),{data:op.data});}
-   catch(e){if(e.status===0||e.status>=500){left.push(op);stop=true;}else left.push({...op,error:e.message});}
-  }
-  this.save(left);return {sent:a.length-left.length,left:left.length};
+  if(this.busy){this.again=true;return this.busy;}
+  this.busy=(async()=>{
+   let sent=0;const tried=new Set();
+   try{
+    for(;;){
+     this.again=false;let stop=false;
+     const todo=this.retry().filter(op=>!tried.has(op.coll+'/'+op.id+'/'+op.at)&&!(op.big&&!op.data));
+     if(!todo.length)break;
+     for(const op of todo){
+      tried.add(op.coll+'/'+op.id+'/'+op.at);
+      try{
+       if(op.del)await api('DELETE','/docs/'+op.coll+'/'+encodeURIComponent(op.id));else await api('PUT','/docs/'+op.coll+'/'+encodeURIComponent(op.id),{data:op.data});
+       /* remove exactly the record that was sent; a newer save of the same record stays queued */
+       this.save(this.list().filter(x=>!(x.coll===op.coll&&x.id===op.id&&x.at===op.at)));sent++;
+      }catch(e){
+       if(e.status===0||e.status>=500||e.status===401||e.status===408||e.status===429){stop=true;break;}
+       this.save(this.list().map(x=>(x.coll===op.coll&&x.id===op.id&&x.at===op.at)?{...x,error:e.message||'Refused by the server'}:x));
+      }
+     }
+     if(stop)break;
+    }
+    return {sent,left:this.retry().length,failed:this.failed().length};
+   }finally{}
+  })();
+  const pr=this.busy;pr.then(()=>{if(this.busy===pr)this.busy=null;},()=>{if(this.busy===pr)this.busy=null;});
+  return pr;
  }
 };
+ob.recover();
+/* the last data received, kept on the phone so the app opens and works without signal */
+const cacheSave=(k,v)=>idb.set('cache-'+k,v);const cacheLoad=k=>idb.get('cache-'+k);
+/* put records that are still waiting to be sent on top of a saved copy, so the screens show the newest version */
+const overlayOutbox=docs=>{const o={...docs};ob.list().forEach(op=>{if(!o[op.coll]||op.big&&!op.data)return;const rows=o[op.coll].filter(r=>String(r.id)!==String(op.id));if(!op.del&&op.data)rows.push({...op.data,id:op.id});o[op.coll]=rows;});return o;};
 
 /* a collection kept in React state and saved to the server whenever it changes.
    Arrays are matched by item.id. Objects (for example the fleet, keyed by boat name) are matched by key. */
@@ -47,7 +91,7 @@ const useColl=(name,init,ready,canWrite)=>{
   cur.forEach((j,i)=>{if(prev.get(i)!==j){ob.push({coll:name,id:i,data:JSON.parse(j)});}});
   prev.forEach((j,i)=>{if(!cur.has(i))ob.push({coll:name,id:i,del:true});});
   synced.current=cur;
-  if(ob.list().length)ob.flush();
+  if(ob.retry().length)ob.flush().catch(()=>{});
  },[v]);
  return [v,setV,load];
 };

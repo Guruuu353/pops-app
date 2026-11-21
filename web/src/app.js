@@ -55,7 +55,7 @@ const ShareLoc=()=>{
  const doRef=useRef(doing);doRef.current=doing;
  useEffect(()=>{if(!on||!navigator.geolocation)return;let lastT=0;const id=navigator.geolocation.watchPosition(p=>{const n=Date.now();if(n-lastT<45000)return;lastT=n;api('POST','/pos',{lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy,doing:doRef.current}).catch(()=>{});},()=>{},{enableHighAccuracy:true,maximumAge:10000,timeout:30000});return()=>navigator.geolocation.clearWatch(id);},[on]);
  const set=v=>{setOn(v);try{localStorage.setItem('pops-share',v?'1':'0');}catch(e){}toast(v?'Sharing your location with the Super Admin':'Location sharing is off');};
- return html`<span className="shareloc"><button className=${'btn small '+(on?'primary':'')} aria-expanded=${open} onClick=${()=>setOpen(o=>!o)}><${Icon} n="map" s=${15}/>${on?'Sharing location':'Share location'}</button>${open&&html`<div className="sharepop"><label className="rowx"><input type="checkbox" checked=${on} onChange=${e=>set(e.target.checked)}/> Share my location while this app is open</label><label htmlFor="shd">What I am doing</label><select id="shd" value=${doing} onChange=${e=>{setDoing(e.target.value);try{localStorage.setItem('pops-doing',e.target.value);}catch(x){}}}>${['In the office','Going for checks','Visiting fishers','Looking up a case','At the LMMA','Meeting a partner','Other field work'].map(o=>html`<option key=${o}>${o}</option>`)}</select><small>Only the Super Admin and the Board can see this. Stops when you switch it off or close the app.</small></div>`}</span>`;
+ return html`<span className="shareloc"><button className=${'btn small '+(on?'primary':'')} aria-expanded=${open} onClick=${()=>setOpen(o=>!o)}><${Icon} n="map" s=${15}/>${on?'Sharing location':'Share location'}</button>${open&&html`<div className="sharebk" onClick=${()=>setOpen(false)}></div><div className="sharepop" role="dialog" aria-label="Share location"><label className="rowx"><input type="checkbox" checked=${on} onChange=${e=>set(e.target.checked)}/> Share my location while this app is open</label><label htmlFor="shd">What I am doing</label><select id="shd" value=${doing} onChange=${e=>{setDoing(e.target.value);try{localStorage.setItem('pops-doing',e.target.value);}catch(x){}}}>${['In the office','Going for checks','Visiting fishers','Looking up a case','At the LMMA','Meeting a partner','Other field work'].map(o=>html`<option key=${o}>${o}</option>`)}</select><small>Only the Super Admin and the Board can see this. Stops when you switch it off or close the app.</small><button type="button" className="btn primary" onClick=${()=>setOpen(false)}>Done</button></div>`}</span>`;
 };
 
 const App=()=>{
@@ -81,32 +81,33 @@ const App=()=>{
  const focusRef=useRef(null);const [tick2,setTick2]=useState(0);
  useEffect(()=>{applyBmuRows(bmuRows);},[bmuRows]);
  useEffect(()=>{if(settings.jcmaName)JCMA_NAME=settings.jcmaName;},[settings.jcmaName]);
+ setFormInc(incidents);
  useEffect(()=>{applyEdge(settings.edge1112);setTick2(n=>n+1);},[JSON.stringify(settings.edge1112||[])]);
  const [partners,setPartners,loadPartners]=useColl('partners',[],0,wr('partners'));
  const [donors,setDonors,loadDonors]=useColl('donors',[],0,wr('donors'));
  const [audit,setAudit]=useState([]);const vl=settings.verified||[];const setVl=fn=>setSettings(s=>({...s,verified:fn(s.verified||[])}));const [people,setPeople]=useState([]);
  const [projOpen,setProjOpen]=useState(null);
  const [toasts,setToasts]=useState([]);const [nav,setNav]=useState(false);const [notif,setNotif]=useState(false);
- const [installEv,setInstallEv]=useState(!!window.__pwaPrompt);const [online,setOnline]=useState(navigator.onLine);const [pend,setPend]=useState(ob.list().length);
+ const [installEv,setInstallEv]=useState(!!window.__pwaPrompt);const [online,setOnline]=useState(navigator.onLine);const [pend,setPend]=useState(ob.retry().length);const [fails,setFails]=useState(ob.failed().length);
  const vw=useWidth();
  const go0=id=>{id=id==='finance'?'tourism':id==='coral'?'projects':id;try{location.hash=id;}catch(e){}setH('#'+id);setNav(false);setNotif(false);window.scrollTo(0,0);};
  const can=m=>m==='guide'?(user?'r':null):(user&&ROLES[role].mods[m])||null;
  const log=(a,m,r)=>setAudit(x=>[[stamp(),user?user.name:'',a,m,r],...x]);
  const toast=msg=>{const id=Date.now()+Math.random();setToasts(t=>[...t,{id,msg}]);setTimeout(()=>setToasts(t=>t.filter(k=>k.id!==id)),4200);};
  const fs=useFieldStore({patrols,setPatrols,setIncidents,log,toast,account:user,settings,sos,setSos});
- const signOut=()=>{tokSet(null);try{localStorage.removeItem('pops-outbox');}catch(e){}setUser(null);setReady(false);};
+ const signOut=()=>{tokSet(null);setUser(null);setReady(false);};
  // session check at start
- useEffect(()=>{(async()=>{if(!tokGet())return setUser(null);try{setUser((await api('GET','/me')).user);}catch(e){setUser(e.status===0&&tokGet()?undefined:null);}})();const so=()=>setUser(null);window.addEventListener('pops-signed-out',so);return()=>window.removeEventListener('pops-signed-out',so);},[]);
+ useEffect(()=>{(async()=>{if(!tokGet())return setUser(null);try{const u=(await api('GET','/me')).user;cacheSave('me',u);setUser(u);}catch(e){if(e.status===0&&tokGet()){const u=await cacheLoad('me');setUser(u||null);}else setUser(null);}})();const so=()=>setUser(null);window.addEventListener('pops-signed-out',so);return()=>window.removeEventListener('pops-signed-out',so);},[]);
  const applyDocs=docs=>{
    if(docs.patrols)loadPatrols(fromDocs(docs.patrols).map(normPatrol));if(docs.incidents)loadInc(fromDocs(docs.incidents).map(normInc));if(docs.fin)loadFin(fromDocs(docs.fin));if(docs.tour)loadTour(fromDocs(docs.tour));
    if(docs.fleet)loadFleet(fromDocs(docs.fleet,true));if(docs.vlog)loadVlog(fromDocs(docs.vlog));if(docs.projects)loadProj(fromDocs(docs.projects));if(docs.projwork)loadWork(fromDocs(docs.projwork));if(docs.coral)loadCoral(fromDocs(docs.coral));if(docs.bmus){const br=fromDocs(docs.bmus);applyBmuRows(br);loadBmus(br);}if(docs.partners)loadPartners(fromDocs(docs.partners));if(docs.donors)loadDonors(fromDocs(docs.donors));if(docs.sos)loadSos(fromDocs(docs.sos));if(docs.assign)loadAssign(fromDocs(docs.assign,true));
    if(docs.settings)loadSettings({bmuDl:true,fishDl:false,piiBmu:false,...fromDocs(docs.settings,true)});
  };
- const [synced,setSynced]=useState(null);const busyRef=useRef(false);busyRef.current=!!(fs.cur&&['Active','Paused'].includes(fs.cur.status));
+ const [offStart,setOffStart]=useState(false);useEffect(()=>{const f=()=>setSyncOpen(true);window.addEventListener('pops-sync-review',f);return()=>window.removeEventListener('pops-sync-review',f);},[]);const [syncOpen,setSyncOpen]=useState(false);const [synced,setSynced]=useState(null);const busyRef=useRef(false);busyRef.current=!!(fs.cur&&['Active','Paused'].includes(fs.cur.status));
  // keep screens current: pick up what others saved (a patrol planned by the admin, a new user, etc.)
  useEffect(()=>{
   if(!user||user.must_change||!ready)return;
-  const pull=async(light)=>{if(busyRef.current||document.hidden||!navigator.onLine)return;try{const r=await ob.flush();if(r.left)return;const {docs}=await api('GET','/docs'+(light===true?'?only=patrols,incidents,vlog,fleet,sos':''));if(busyRef.current)return;applyDocs(docs);setSynced(new Date());if(light===true)return;try{const lk=await api('GET','/lookups');LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains;}catch(e){}if(['admin','board'].includes(user.role)){try{setPeople((await api('GET','/users')).users);}catch(e){}}}catch(e){}};
+  const pull=async(light)=>{if(busyRef.current||document.hidden||!navigator.onLine)return;try{const r=await ob.flush();if(r.left)return;const {docs}=await api('GET','/docs'+(light===true?'?only=patrols,incidents,vlog,fleet,sos':''));if(busyRef.current)return;applyDocs(docs);setSynced(new Date());if(light!==true)cacheSave('docs-'+user.id,docs);if(light===true)return;try{const lk=await api('GET','/lookups');LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains;}catch(e){}if(['admin','board'].includes(user.role)){try{setPeople((await api('GET','/users')).users);}catch(e){}}}catch(e){}};
   const t=setInterval(pull,60000);const t2=setInterval(()=>pull(true),10000);
   /* emergency alerts are checked every 8 seconds, even while a patrol is being recorded, so a ranger sees the office has answered and the office sees a new SOS quickly */
   const t3=setInterval(async()=>{if(document.hidden||!navigator.onLine)return;try{const r=await ob.flush();if(r.left)return;const {docs}=await api('GET','/docs?only=sos');if(docs.sos)loadSos(fromDocs(docs.sos));}catch(e){}},8000);window.POPS_PULL=()=>pull();const vis=()=>{if(!document.hidden)pull();};document.addEventListener('visibilitychange',vis);window.addEventListener('online',pull);
@@ -120,13 +121,16 @@ const App=()=>{
    await ob.flush();
    const [{docs},lk]=await Promise.all([api('GET','/docs'),api('GET','/lookups')]);
    LOOK.infringements=lk.infringements;LOOK.fees=lk.fees;LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains||[];LOOK.bmu=lk.bmu;LOOK.today=lk.today;try{const z=await api('GET','/zones');ZONES_API.length=0;ZONES_API.push(...z.zones);applyZones(z.zones);applyPlaces(z.landmarks);LOOK.bmu=z.bmu||lk.bmu;}catch(e){}
-   applyDocs(docs);
+   applyDocs(docs);cacheSave('docs-'+user.id,docs);cacheSave('look-'+user.id,{lk,room:LOOK.bmu});
    if(['admin','board'].includes(user.role)){try{setPeople((await api('GET','/users')).users);}catch(e){}}
    if(user.role==='admin'){try{setAudit((await api('GET','/audit?limit=300')).audit.map(a=>[(a.ts||'').replace('T',' ').slice(0,16),a.user_name||'',String(a.action||'').replace(/_/g,' '),a.entity||'',a.entity_id||'']));}catch(e){}}
    setReady(true);
-  }catch(e){setLoadErr(e.message);}})();
+  }catch(e){
+   /* no signal: open with the last copy kept on this phone, plus anything still waiting to be sent */
+   if(e.status===0){const [cd,cl]=await Promise.all([cacheLoad('docs-'+user.id),cacheLoad('look-'+user.id)]);if(cd){if(cl&&cl.lk){const lk=cl.lk;LOOK.infringements=lk.infringements;LOOK.fees=lk.fees;LOOK.rangers=lk.rangers;LOOK.coxswains=lk.coxswains||[];LOOK.bmu=cl.room||lk.bmu;LOOK.today=lk.today;}applyDocs(overlayOutbox(cd));setOffStart(true);setReady(true);return;}}
+   setLoadErr(e.status===0?'No signal, and nothing is saved on this phone yet. Open POps once with a connection first.':e.message);}})();
  },[user&&user.id,user&&user.must_change]);
- useEffect(()=>{const f=()=>setH(location.hash);window.addEventListener('hashchange',f);const p=()=>setInstallEv(!!window.__pwaPrompt);window.addEventListener('pwa-ready',p);const on=()=>{setOnline(true);ob.flush().then(r=>r.sent&&toast(r.sent+' saved record'+(r.sent>1?'s':'')+' sent to the server'));};const off=()=>setOnline(false);const po=()=>setPend(ob.list().length);window.addEventListener('online',on);window.addEventListener('offline',off);window.addEventListener('pops-outbox',po);return()=>{window.removeEventListener('hashchange',f);window.removeEventListener('pwa-ready',p);window.removeEventListener('online',on);window.removeEventListener('offline',off);window.removeEventListener('pops-outbox',po);};},[]);
+ useEffect(()=>{const f=()=>setH(location.hash);window.addEventListener('hashchange',f);const p=()=>setInstallEv(!!window.__pwaPrompt);window.addEventListener('pwa-ready',p);const on=()=>{setOnline(true);ob.flush().then(r=>r.sent&&toast(r.sent+' saved record'+(r.sent>1?'s':'')+' sent to the server'));};const off=()=>setOnline(false);const po=()=>{setPend(ob.retry().length);setFails(ob.failed().length);};window.addEventListener('online',on);window.addEventListener('offline',off);window.addEventListener('pops-outbox',po);return()=>{window.removeEventListener('hashchange',f);window.removeEventListener('pwa-ready',p);window.removeEventListener('online',on);window.removeEventListener('offline',off);window.removeEventListener('pops-outbox',po);};},[]);
  useEffect(()=>{if(h==='#field'&&user&&role!=='ranger')go('dashboard');},[h,user]);
  useEffect(()=>{if(window.POPS_PWA&&'serviceWorker' in navigator&&/^https?:/.test(location.protocol)){const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.register('sw.js').catch(()=>{});navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!window.__reloaded){window.__reloaded=true;location.reload();}});}},[]);
  // shared reference lists used by the screens
@@ -161,7 +165,7 @@ const App=()=>{
  if(user.must_change)return html`<${ForcedPw} onIn=${u=>setUser(u)}/>`;
  if(loadErr)return html`<div className="boot"><${Logo} s=${72}/><p>Could not load your records: ${loadErr}</p><button className="btn primary" onClick=${()=>location.reload()}>Try again</button></div>`;
  if(!ready)return html`<div className="boot"><${Logo} s=${72}/><p className="boot-name">POps</p><p className="muted">Loading your records…</p><span className="boot-spin" aria-hidden="true"></span></div>`;
- if(role==='ranger')return html`<${Ctx.Provider} value=${ctx}><${FieldShell}/><${Toasts} toasts=${toasts}/></${Ctx.Provider}>`;
+ if(role==='ranger')return html`<${Ctx.Provider} value=${ctx}><${FieldShell}/><${Modal} open=${syncOpen} onClose=${()=>setSyncOpen(false)} title="Records the server did not accept"><p className="muted small">These were saved on this phone but the server refused them, so they were not lost. Press Try again after fixing the cause (for example sign in again or reduce photos). Discard removes the saved copy.</p><ul className="synclist">${ob.failed().map(op=>html`<li key=${op.coll+op.id+op.at}><b>${op.coll} · ${op.id}</b><small>${op.error}</small><button type="button" className="btn small" onClick=${()=>ob.discard(op)}>Discard</button></li>`)}${!ob.failed().length&&html`<li className="muted">Nothing needs attention.</li>`}</ul><div className="btnrow"><button type="button" className="btn primary" onClick=${()=>{ob.clearErrors();ob.flush().then(r=>toast(r.failed?r.failed+' still refused':'Sent'));}}>Try again</button></div></${Modal}><${Toasts} toasts=${toasts}/></${Ctx.Provider}>`;
  const View=VIEWS[mod];const m=MODS.find(x=>x.id===mod);
  const groups=[];MODS.forEach(x=>{if(!can(x.id))return;let g=groups.find(k=>k[0]===x.group);if(!g){g=[x.group,[]];groups.push(g);}g[1].push(x);});
  return html`<${Ctx.Provider} value=${ctx}><div className="app">
@@ -173,7 +177,7 @@ const App=()=>{
  </aside>
  <div className="main">
   <header className="top"><button className="iconbtn menu" aria-label="Open menu" onClick=${()=>setNav(true)}><${Icon} n="menu"/></button>
-   <div className="topr">${['admin','officer','fisheries','board'].includes(role)&&html`<${ShareLoc}/>`}${!online&&html`<span className="chip warn"><i/>Offline</span>`}${pend>0&&html`<span className="chip warn"><i/>${pend} waiting to send</span>`}${pwa&&pwa.canInstall&&html`<button className="btn small primary" onClick=${pwa.install}><${Icon} n="download" s=${15}/>Install app</button>`}
+   <div className="topr">${['admin','officer','fisheries','board'].includes(role)&&html`<${ShareLoc}/>`}${!online&&html`<span className="chip warn"><i/>Offline</span>`}${pend>0&&html`<button type="button" className="chip warn chipb" onClick=${()=>{ob.flush().then(r=>toast(r.left?r.left+' still waiting. They send when there is signal.':'All saved records sent.'));}}><i/>${pend} waiting to send</button>`}${fails>0&&html`<button type="button" className="chip bad chipb" onClick=${()=>setSyncOpen(true)}><i/>${fails} not accepted. Review</button>`}${pwa&&pwa.canInstall&&html`<button className="btn small primary" onClick=${pwa.install}><${Icon} n="download" s=${15}/>Install app</button>`}
    <button className="iconbtn bellbtn" aria-label=${'Notifications'+(unseen?', '+unseen+' need attention':'')} aria-expanded=${notif} onClick=${()=>setNotif(o=>!o)}><${Icon} n="bell"/>${unseen>0&&html`<b className="dotn">${unseen}</b>`}</button>
    <button className="iconbtn" aria-label="Switch light or dark theme" onClick=${theme}><${Icon} n=${dark()?'sun':'moon'}/></button></div></header>
   ${notif&&html`<div className="notifscrim" onClick=${()=>setNotif(false)}/><section className="notifpanel" role="dialog" aria-label="Notifications"><header><h4>Notifications</h4><span><button className="link" onClick=${()=>markSeen(notes.map(n=>n.id))}>Mark all read</button><button className="iconbtn" aria-label="Close notifications" onClick=${()=>setNotif(false)}>×</button></span></header>
@@ -182,6 +186,7 @@ const App=()=>{
   <main id="content">${can(mod)?html`<${View} key=${role+bmuId+mod}/>`:html`<div key=${role+mod}><${PageHead} title=${m.label} sub=${m.fn}/><${Denied} mod=${m.label} role=${role}/></div>`}</main>
   <footer className="foot"><${Logo} s=${28}/><div><b>Patte Conservation CBO</b><small>Iweni Locally Managed Marine Area · Pate Island, Lamu, Kenya</small><small>POps · Patte Operations Platform · version ${'__BUILD__'}</small></div></footer>
  </div>
+ <${Modal} open=${syncOpen} onClose=${()=>setSyncOpen(false)} title="Records the server did not accept"><p className="muted small">These were saved on this phone but the server refused them, so they were not lost. Press Try again after fixing the cause (for example sign in again or reduce photos). Discard removes the saved copy.</p><ul className="synclist">${ob.failed().map(op=>html`<li key=${op.coll+op.id+op.at}><b>${op.coll} · ${op.id}</b><small>${op.error}</small><button type="button" className="btn small" onClick=${()=>ob.discard(op)}>Discard</button></li>`)}${!ob.failed().length&&html`<li className="muted">Nothing needs attention.</li>`}</ul><div className="btnrow"><button type="button" className="btn primary" onClick=${()=>{ob.clearErrors();ob.flush().then(r=>toast(r.failed?r.failed+' still refused':'Sent'));}}>Try again</button></div></${Modal}>
  <${Toasts} toasts=${toasts}/>
  </div></${Ctx.Provider}>`;
 };

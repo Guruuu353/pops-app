@@ -69,3 +69,13 @@ Figure 1 / KML of the zones, the remaining log pages, the default ranger, and th
 - **Map**: rotation (buttons, Q/E, two-finger twist), compass (tap = north up, double-tap = follow phone), full screen, layers for staff, SOS and other BMUs. The south edge (point 11 to 12) can be traced along the shore in Iweni LMMA > Zones.
 - **Guide** module with SOS, patrol, import and map instructions and downloadable CSV templates.
 - Tests: `node --no-warnings test/turn3.js` added.
+
+## Update 4 (Nov 2026)
+- **Patrol creation**: single and joint patrols take any number of BMUs plus a typed "other BMU". Joint patrols list agencies (KWS, KFS, Fisheries, Police, Coast Guard, KMA and others) plus typed agencies. The ranger confirms or edits BMUs, agency counts and the leader before starting.
+- **Other leader**: choose "Other" and type a name, phone and position. These fill Form 1A and the report and are written to the audit log. No account or role is created; the patrol runs on a chosen ranger's phone.
+- **GPS accuracy**: fixes coarser than 50 m are ignored, drift while standing still is ignored, impossible jumps are ignored, and no line or distance is counted across a pause, a signal gap or an app reopen (shown as a dotted amber line). Inside/outside changes need two consecutive fixes.
+- **Maps**: whole-earth button (and back), live list of patrols, staff and SOS with Lock on / Follow, share-location panel fixed for small screens.
+- **Offline**: the outbox no longer loses records (one send at a time, IndexedDB fallback when storage is full, refused records are listed under "not accepted. Review" instead of blocking everything). The app opens with no signal from the last saved copy plus unsent records. Field staff sessions last 72 h.
+- **Tourism and Finance**: typed vessel name and registration, From and To BMU (with "other"), BMU area with "other", receipt photo or PDF on visitor and finance entries, new "Boat movements between BMUs" report.
+- **Documents**: logo sits clear of the header rule, tables page (10/25/50/100) with search, imported patrols fill Form 1A and the report from the matching entry-log rows and paper-log notes.
+- Tests: `node --no-warnings test/turn4.js`.

@@ -25,7 +25,7 @@ const infShow=c=>{const x=infItem(c);return x?x.code:c;};
 const GEARS=['Hand line','Gillnet','Long line hooks','Trap or basket','Spear gun','Beach seine','Monofilament gillnet','Undersize net','Trawl net','Scoop net','Ring net','Trammel net','Trolling net','Harpoon','Hooked stick','Pointed stick','None','Other'];
 const ACTIONS=['Advised or warned','Gear confiscated','Catch released','Referred to Fisheries','Handed to Police or Coast Guard','No action needed'];
 const OBJECTIVES=['Surveillance','Enforcement','Joint patrol','Monitoring and research','Other'];
-const AGENCIES=[['bmu','BMU (including boatmen)'],['cfd','County Fisheries Dept'],['cps','County Police Service'],['kfs','Kenya Fisheries Service'],['kcg','Kenya Coast Guard Service'],['kma','Kenya Maritime Authority'],['other','Other (specify)']];
+const AGENCIES=[['bmu','BMU (including boatmen)'],['cfd','County Fisheries Dept'],['cps','County Police Service'],['kfs','Kenya Fisheries Service'],['kws','Kenya Wildlife Service'],['kcg','Kenya Coast Guard Service'],['kma','Kenya Maritime Authority'],['other','Other (specify)']];
 const CHAL={fuel:['Fuel shortage','Uhaba wa mafuta'],weather:['Bad weather','Hali mbaya ya anga'],mech:['Mechanical issues','Boti kuharibika'],resist:['Resistance from fishers','Usumbufu wa wavuvi'],other:['Other','Mengine']};
 const ATTACH=[['capture','Patrol data capture form'],['costing','Patrol costing table'],['seizure','Seizure form'],['mcs','MCS outcome data compilation form'],['other','Other']];
 const UNITS=['Piece','Kg','Metre','Set','Litre'];
@@ -40,11 +40,17 @@ const boatType=b=>{const x=BOATS.find(k=>k.name===b);return (x&&x.type)||'';};
 const staffOf=n=>{const pool=[...(typeof PEOPLE!=='undefined'?PEOPLE:[]),...(LOOK.rangers||[]),...(LOOK.coxswains||[])];const u=pool.find(s=>s.name===n&&(s.phone||s.title||s.role))||pool.find(s=>s.name===n)||{};return {title:u.title||(ROLES[u.role]?ROLES[u.role].label:''),no:'',phone:u.phone||''};};
 /* Every form is filled from the patrol and the saved details: leader phone and position from the user record, the JCMA name from Settings, BMU names, participants, vessel, times. Nothing a form needs is left to be typed again. */
 let JCMA_NAME='Pate–Shanga JCMA';
+/* Imported paper logs keep the patrol and the entry log as separate records. When a patrol is opened, the entry-log rows for that day are matched to it (by link, else by date and time) so Form 1A and the report fill themselves. */
+let FORM_INC=[];const setFormInc=l=>{FORM_INC=l||[];};
+const tmin=t=>{const m=/^(\d{1,2}):(\d{2})/.exec(t||'');return m?+m[1]*60+ +m[2]:null;};
+const incFor=p=>{if(!p||(p.enc||[]).length)return [];const a=tmin(p.start),b=tmin(p.end);
+ return FORM_INC.filter(i=>{if(i.patrol===p.id)return true;if(!(p.imported||i.imported)||(i.patrol&&i.patrol!=='—'&&i.patrol!==''))return false;if((i.iso||'')!==(p.iso||'x'))return false;const t=tmin(i.time);if(t==null||a==null||b==null)return true;return a<=b?(t>=a-20&&t<=b+20):(t>=a-20||t<=b+20);});};
+const incToEnc=(i,n0)=>{const ps=(i.personsList&&i.personsList.length)?i.personsList:[{name:i.persons&&i.persons!=='Not identified'?i.persons:'Not identified',id:'',phone:''}];return ps.map((x,k)=>({n:n0+k+1,time:i.time||'',name:x.name||'',id:x.id||'',phone:x.phone||'',gear:'None',gearId:'',qty:'',ground:i.loc||'',origin:'',code:i.code||'',action:i.action&&i.action!=='—'?i.action:'',details:i.desc||'',seized:false,fromEntryLog:true}));};
 const fillForm=p0=>{
  const p={...p0};const st=staffOf(p.leader);
  p.leaderPhone=p.leaderPhone||st.phone||'';
  p.leaderPos=(p.leaderPos&&p.leaderPos!=='Patrol leader'?p.leaderPos:(st.title||p.leaderPos||'Patrol leader'));
- const jb=(p.mode==='joint'&&(p.jointWith||[]).length)?[bmuName(p.bmu),...(p.jointWith||[]).map(bmuName)].join(', '):'';
+ const allB=[bmuName(p.bmu),...(p.jointWith||[]).map(bmuName),...(p.bmuOther||[])].filter(Boolean);const jb=allB.length>1?allB.join(', '):'';
  p.jcma=(p.jcma&&p.jcma!=='Pate-Shanga'?p.jcma:JCMA_NAME);
  p.bmuLine=jb||bmuName(p.bmu);
  p.county=p.county||'Lamu';p.objective=p.objective&&p.objective!=='—'?p.objective:'Surveillance';
@@ -52,7 +58,11 @@ const fillForm=p0=>{
  if(p.cox&&!p.coxPhone)p.coxPhone=staffOf(p.cox).phone||'';
  p.vessel=p.vessel&&p.vessel.name?p.vessel:{name:p.boat,type:boatType(p.boat),hp:hpOf(p.boat)};
  if(!p.parts||!Object.keys(p.parts).length)p.parts={bmu:(p.rangers||[]).length+(p.cox?1:0)||1};
+ if(p.leaderOther&&p.leaderOther.name){p.leaderPhone=p.leaderOther.phone||p.leaderPhone;if(p.leaderOther.title)p.leaderPos=p.leaderOther.title;}
+ p.partnerLine=[...(p.agencies||[]).map(k=>(AGENCIES.find(a=>a[0]===k)||[k,k])[1]),...(p.partnersOther||[])].join(', ');
  p.areas=(p.areas&&p.areas.filter(Boolean).length)?p.areas:[p.area].filter(Boolean);
+ if(!(p.enc||[]).length){const li=incFor(p);if(li.length){let n=0;p.enc=li.flatMap(i=>{const r=incToEnc(i,n);n+=r.length;return r;});}}
+ if(p.imported){const ch={...(p.chal||{})};if(p.challenges&&!/^(none|nil|no|n\/a)\b/i.test(p.challenges)&&!Object.values(ch).some(Boolean)){ch.other=true;ch.otherText=p.challenges;}p.chal=ch;if(!p.prep||!p.prep.name)p.prep={...(p.prep||{}),name:p.leader,desig:'Marine Ranger',date:p.date};}
  return p;
 };
 
@@ -84,6 +94,7 @@ const FormCapture=({p:p0,pii})=>{const p=fillForm(p0);
  <div className="pp-grid"><div><label>Patrol reference no.</label><b>${p.id}</b></div><div><label>Patrol objective</label><b>${p.objective}</b></div><div><label>Patrol date</label><b>${p.date}</b></div><div><label>Patrol boat name</label><b>${p.boat}</b></div><div><label>Patrol leader name</label><b>${p.leader}</b></div><div><label>Position</label><b>${p.leaderPos}</b></div><div><label>Phone no.</label><b>${p.leaderPhone}</b></div><div><label>County name</label><b>${p.county}</b></div><div><label>JCMA name</label><b>${p.jcma}</b></div><div><label>BMU name</label><b>${p.bmuLine}</b></div><div><label>Start time (12 hrs)</label><b>${ampm(p.start)}</b></div><div><label>End time (12 hrs)</label><b>${ampm(p.end)}</b></div></div>
  <div className="pp-scroll"><table className="pp-t"><thead><tr><th>S/No</th><th>Time</th><th>Fisher's name</th><th>ID</th><th>Phone no.</th><th>Gear type and ID</th><th>Gear quantity</th><th>Fishing location / ground</th><th>BMU origin</th><th>Infringement code</th><th>Items confiscated / encountered, details and action taken</th></tr></thead>
  <tbody>${rows.map((e,i)=>html`<tr key=${i}><td>${i+1}</td>${e?[html`<td key="a">${e.time}</td>`,html`<td key="b">${e.name}</td>`,html`<td key="c">${pii?e.id:mask(e.id)}</td>`,html`<td key="d">${pii?e.phone:mask(e.phone)}</td>`,html`<td key="e">${e.gear==='None'?'—':e.gear+(e.gearId?' '+e.gearId:'')}</td>`,html`<td key="f">${e.qty||'—'}</td>`,html`<td key="g">${e.ground}</td>`,html`<td key="h">${e.origin}</td>`,html`<td key="i">${e.code||'—'}</td>`,html`<td key="j">${e.details}${e.action?' ['+e.action+']':''}</td>`]:Array.from({length:10}).map((_,k)=>html`<td key=${k}/>`)}</tr>`)}</tbody></table></div>
+ ${p.imported&&(p.observations||p.action&&p.action!=='—')&&html`<p className="pp-ref"><b>Observations (paper log):</b> ${p.observations||'—'}${p.action&&p.action!=='—'?html` · <b>Action taken:</b> ${p.action}`:''}</p>`}
  <div className="pp-legend"><b>Infringement code:</b> ${(LOOK.infringements||[]).map(i=>html`<span key=${i.code}>${i.code}. ${i.label}</span>`)}</div><${PapFoot} p=${p}/></div>`;
 };
 

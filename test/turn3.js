@@ -45,7 +45,7 @@ const { start, browser, login } = require('./harness');
   await ap.click('button:has-text("New patrol"), button:has-text("Create")');
   check('patrol type offered', await ap.isVisible('button:has-text("Joint with other BMUs")'));
   await ap.click('button:has-text("Joint with other BMUs")');
-  check('joint shows other BMUs and 30 min alert', await ap.isVisible('text=Shela BMU') && /30 minutes/.test(await ap.innerText('.modal')));
+  check('joint shows agencies and 30 min alert', await ap.isVisible('text=Kenya Wildlife Service') && /30 minutes/.test(await ap.innerText('.modal')));
   await ap.keyboard.press('Escape');
   // ranger SOS on a phone, inside the LMMA
   const R = await B.open(S.base, { viewport: { width: 390, height: 844 }, permissions: ['geolocation'], geolocation: { latitude: -2.2, longitude: 41.0 } }); const rp = R.page;

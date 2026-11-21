@@ -22,9 +22,9 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
   const run = (sql, ...a) => db.prepare(sql).run(...a);
   const audit = (u, action, entity, id, detail) => run('INSERT INTO audit(ts,user_id,action,entity,entity_id,detail) VALUES(?,?,?,?,?,?)', nowIso(), u ? u.id : null, action, entity, id, detail ? JSON.stringify(detail) : null);
 
-  // ---- sessions: signed token, 12 h, invalidated when the password changes (token_version) ----
+  // ---- sessions: signed token, 12 h (72 h for field staff who may be offline at sea), invalidated when the password changes (token_version) ----
   const sign = (s) => crypto.createHmac('sha256', secret).update(s).digest('base64url');
-  const mkToken = (u) => { const b = `${u.id}.${u.token_version}.${Date.now() + 12 * 3600e3}`; return b + '.' + sign(b); };
+  const mkToken = (u) => { const b = `${u.id}.${u.token_version}.${Date.now() + (['ranger', 'cox'].includes(u.role) ? 72 : 12) * 3600e3}`; return b + '.' + sign(b); };
   const readToken = (t) => {
     const p = String(t || '').split('.'); if (p.length !== 4) return null;
     const b = p.slice(0, 3).join('.'); const sg = Buffer.from(p[3]), ex = Buffer.from(sign(b));
@@ -65,7 +65,7 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
   // any photo pasted into a record as a data: address is moved to a file and replaced by its short address
   const moveInlineImages = (v, userId) => {
     if (typeof v === 'string') {
-      const m = /^data:(image\/(?:jpeg|png|webp|gif));base64,/.exec(v);
+      const m = /^data:(image\/(?:jpeg|png|webp|gif)|application\/pdf);base64,/.exec(v);
       if (m && v.length > 1500) return saveFile(Buffer.from(v.slice(m[0].length), 'base64'), m[1], 'photo', userId).url;
       return v;
     }
