@@ -39,12 +39,12 @@ const patrolItems=(p,o={})=>{
 };
 
 const PatrolTimeline=({p})=>{
- const ev=evList(p);const [nf,setNf]=useState(true);const order=ev.map((_,i)=>i);if(nf)order.reverse();
+ const ev=evList(p);const [nf,setNf]=useState(true);const [cap,setCap]=useState(40);const order=ev.map((_,i)=>i);if(nf)order.reverse();
  if(!ev.length)return html`<p className="muted">No events were recorded for this patrol.</p>`;
  const gap=(i)=>{const e=ev[i];const pair={offline:'online',gps_lost:'gps_ok'}[e.k];if(!pair||!e.t)return '';const n=ev.slice(i+1).find(x=>x.k===pair);if(!n||!n.t)return ' (still out)';const m=Math.round((new Date(n.t)-new Date(e.t))/60000);return ' (back after '+(m<1?'under a minute':m+' min')+')';};
  const bad=ev.filter(e=>e.k==='offline'||e.k==='gps_lost').length;
  return html`<div>${bad>0&&html`<${Notice} tone="warn" title=${bad+' interruption'+(bad>1?'s':'')}>The ranger lost network or GPS during this patrol. Records were kept on the phone and sent when the signal returned.</${Notice}>`}
- <div className="seg" style=${{margin:'0 0 8px'}}><button type="button" className=${'segb '+(nf?'on':'')} onClick=${()=>setNf(true)}>Newest first</button><button type="button" className=${'segb '+(nf?'':'on')} onClick=${()=>setNf(false)}>Oldest first</button></div><ol className="tline">${order.map(i=>{const e=ev[i];return html`<li key=${i} className=${'tl-'+(e.k==='offline'||e.k==='gps_lost'?'bad':e.k==='online'||e.k==='gps_ok'?'ok':'')}><time>${e.t?hmOf(e.t):'—'}</time><b>${EVL[e.k]||e.k}</b><span>${e.n||''}${gap(i)}</span></li>`;})}</ol></div>`;
+ <div className="seg" style=${{margin:'0 0 8px'}}><button type="button" className=${'segb '+(nf?'on':'')} onClick=${()=>setNf(true)}>Newest first</button><button type="button" className=${'segb '+(nf?'':'on')} onClick=${()=>setNf(false)}>Oldest first</button></div><ol className="tline">${order.slice(0,cap).map(i=>{const e=ev[i];return html`<li key=${i} className=${'tl-'+(e.k==='offline'||e.k==='gps_lost'?'bad':e.k==='online'||e.k==='gps_ok'?'ok':'')}><time>${e.t?hmOf(e.t):'—'}</time><b>${EVL[e.k]||e.k}</b><span>${e.n||''}${gap(i)}</span></li>`;})}</ol>${order.length>cap&&html`<div className="pager"><span>Showing ${cap} of ${order.length}</span><button type="button" className="btn small" onClick=${()=>setCap(c=>c+60)}>Show 60 more</button></div>`}</div>`;
 };
 
 /* ---------- progress alerts for patrols in the field ---------- */

@@ -57,6 +57,23 @@ const { start, browser, login } = require('./harness');
   check('imported patrol Form 1A shows the entry-log row', /Said Omar/.test(ptxt) && /Stone collecting/.test(ptxt), ptxt.slice(0, 200));
   const hb = await ap.evaluate(() => { const h = document.querySelector('.pp-head'), l = document.querySelector('.pp-logo'); if (!h || !l) return null; const a = h.getBoundingClientRect(), b = l.getBoundingClientRect(); return { rule: a.bottom, logo: b.bottom }; });
   check('logo sits above the header rule', hb && hb.logo <= hb.rule - 1, JSON.stringify(hb));
+  // imported patrol: MCS form opens, admin can edit rows
+  await ap.click('button:has-text("MCS"), [role=tab]:has-text("MCS")').catch(() => {});
+  await ap.waitForTimeout(400);
+  check('MCS form of an imported patrol opens without crashing', !(await ap.locator('text=Something went wrong').count()) && (A.errs || []).every((e) => !/reading '0'/.test(e)), (A.errs || []).join('|').slice(0, 200));
+  await ap.keyboard.press('Escape');
+  await ap.click('text=IMP-1').catch(() => {}); await ap.click('button:has-text("Edit")').catch(() => {}); await ap.waitForSelector('#pe-save', { timeout: 5000 }).catch(() => {});
+  check('admin edit shows the imported Form 1A row', await ap.inputValue('#ee-n0').catch(() => '') === 'Said Omar');
+  await ap.fill('#ee-i0', '12345678'); await ap.click('#pe-save'); await ap.waitForTimeout(1500);
+  check('edited row saved', ((await docs0('patrols')).find((x) => x.id === 'IMP-1') || {}).enc?.[0]?.id === '12345678');
+  // map: world view then wheel zoom does not freeze
+  await ap.goto(S.base + '/#live-map'); await ap.waitForSelector('.geomap');
+  const mp = await ap.locator('.geomap').boundingBox();
+  await ap.mouse.move(mp.x + 300, mp.y + 300); await ap.keyboard.down('Control');
+  for (let i = 0; i < 25; i++) await ap.mouse.wheel(0, 300);
+  for (let i = 0; i < 40; i++) await ap.mouse.wheel(0, -300);
+  await ap.keyboard.up('Control');
+  check('map still responds after zooming to both limits', await ap.isVisible('[aria-label="Show the whole earth"]') && await ap.evaluate(() => 1) === 1);
   // outbox: offline save then reconnect
   await A.ctx.setOffline(true);
   await ap.goto(S.base + '/#projects').catch(() => {});

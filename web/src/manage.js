@@ -9,13 +9,16 @@ const ConfirmDel=({open,onClose,what,onYes})=>html`<${Modal} open=${open} onClos
 
 const PatrolEdit=({p,onClose})=>{
  const {setPatrols,log,toast}=useApp();
- const [f,setF]=useState(()=>({iso:p.iso||'',start:p.start||'',end:p.end==='—'?'':p.end,leader:p.leader,rangers:(p.rangers||[]).join(', '),boat:p.boat,cox:p.cox,area:p.area,inLmma:!!p.inLmma,status:p.status,review:p.review,objective:p.objective==='—'?'':p.objective,km:p.km||'',observations:p.observations||'',challenges:p.challenges||'',action:p.action==='—'?'':p.action,bmu:p.bmu||'pate'}));
+ const [f,setF]=useState(()=>({iso:p.iso||'',start:p.start||'',end:p.end==='—'?'':p.end,leader:p.leader,rangers:(p.rangers||[]).join(', '),boat:p.boat,cox:p.cox,area:p.area,inLmma:!!p.inLmma,status:p.status,review:p.review,objective:p.objective==='—'?'':p.objective,km:p.km||'',observations:p.observations||'',challenges:p.challenges||'',action:p.action==='—'?'':p.action,bmu:p.bmu||'pate',leaderPhone:p.leaderPhone||'',fuel:p.fuel||'',bmuOther:(p.bmuOther||[]).join(', '),jointWith:(p.jointWith||[]).join(', '),partnersOther:(p.partnersOther||[]).join(', '),prepName:(p.prep&&p.prep.name)||'',prepDesig:(p.prep&&p.prep.desig)||'',chal:{...(p.chal||{})},chalText:(p.chal&&p.chal.otherText)||'',parts:{...(p.parts||{})}}));
+ /* Form 1A rows: for an imported patrol this starts with the entry-log rows matched to it, so they can be corrected and kept */
+ const [enc,setEnc]=useState(()=>(fillForm(p).enc||[]).map(e=>({...e})));
+ const eu=(i,k,v)=>setEnc(a=>a.map((e,j)=>j===i?{...e,[k]:v}:e));
  const u=(k,v)=>setF(o=>({...o,[k]:v}));
  const names=[...(LOOK.rangers||[]),...(LOOK.coxswains||[])].map(x=>x.name);
  const save=()=>{
   if(!f.iso){toast('Enter the date');return;}
   const rg=cleanNames(f.rangers);const leader=f.leader.trim()||rg[0]||'';const all=rg.includes(leader)||!leader?rg:[leader,...rg];
-  setPatrols(x=>x.map(q=>q.id===p.id?{...q,iso:f.iso,date:isoLabel(f.iso),start:f.start,end:f.end||'—',leader,rangers:all,boat:f.boat,cox:f.cox,area:f.area,areas:[f.area,...(q.areas||[]).slice(1)].filter(Boolean),inLmma:f.inLmma,status:f.status,review:f.review||'—',objective:f.objective||'—',km:+f.km||0,observations:f.observations,challenges:f.challenges,action:f.action||'—',bmu:f.bmu,edited:new Date().toISOString()}:q));
+  setPatrols(x=>x.map(q=>q.id===p.id?{...q,iso:f.iso,date:isoLabel(f.iso),start:f.start,end:f.end||'—',leader,rangers:all,boat:f.boat,cox:f.cox,area:f.area,areas:[f.area,...(q.areas||[]).slice(1)].filter(Boolean),inLmma:f.inLmma,status:f.status,review:f.review||'—',objective:f.objective||'—',km:+f.km||0,observations:f.observations,challenges:f.challenges,action:f.action||'—',bmu:f.bmu,leaderPhone:f.leaderPhone,fuel:f.fuel===''?q.fuel:+f.fuel,bmuOther:cleanNames(f.bmuOther),partnersOther:cleanNames(f.partnersOther),prep:{...(q.prep||{}),name:f.prepName,desig:f.prepDesig},chal:{...f.chal,otherText:f.chalText},parts:Object.fromEntries(Object.entries(f.parts).map(([k,v])=>[k,+v||0])),enc:enc.map((e,i)=>({...e,n:i+1,seized:!!e.seized||/confiscat/i.test(e.action||'')})),edited:new Date().toISOString()}:q));
   log('Edited patrol','Patrols',p.id);toast('Patrol '+p.id+' saved');onClose();
  };
  return html`<div className="form">
@@ -36,16 +39,43 @@ const PatrolEdit=({p,onClose})=>{
   <${Field} label="Observations" id="pe-ob" wide=${true}><${TA} id="pe-ob" value=${f.observations} onChange=${v=>u('observations',v)}/></${Field}>
   <${Field} label="Challenges" id="pe-ch" wide=${true}><${TA} id="pe-ch" rows=${2} value=${f.challenges} onChange=${v=>u('challenges',v)}/></${Field}>
   <${Field} label="Action taken" id="pe-ac" wide=${true}><${TA} id="pe-ac" rows=${2} value=${f.action} onChange=${v=>u('action',v)}/></${Field}>
+  <${Field} label="Leader phone" id="pe-lp"><${Inp} id="pe-lp" type="tel" value=${f.leaderPhone} onChange=${v=>u('leaderPhone',v)}/></${Field}>
+  <${Field} label="Fuel used (litres)" id="pe-fu"><${Inp} id="pe-fu" type="number" value=${f.fuel} onChange=${v=>u('fuel',v)}/></${Field}>
+  <${Field} label="Other BMUs (commas)" id="pe-bo"><${Inp} id="pe-bo" value=${f.bmuOther} onChange=${v=>u('bmuOther',v)}/></${Field}>
+  <${Field} label="Other agencies (commas)" id="pe-po"><${Inp} id="pe-po" value=${f.partnersOther} onChange=${v=>u('partnersOther',v)}/></${Field}>
+  <${Field} label="Report prepared by" id="pe-pn"><${Inp} id="pe-pn" value=${f.prepName} onChange=${v=>u('prepName',v)}/></${Field}>
+  <${Field} label="Designation" id="pe-pd"><${Inp} id="pe-pd" value=${f.prepDesig} onChange=${v=>u('prepDesig',v)}/></${Field}>
+  <${Field} label="Challenges faced" id="pe-chk" wide=${true}><div className="checks">${Object.keys(CHAL).map(k=>html`<label key=${k} className="chk"><input type="checkbox" checked=${!!f.chal[k]} onChange=${e=>setF(o=>({...o,chal:{...o.chal,[k]:e.target.checked}}))}/> ${CHAL[k][0]}</label>`)}</div>${f.chal.other&&html`<${Inp} id="pe-cht" aria-label="Other challenge" value=${f.chalText} onChange=${v=>u('chalText',v)} placeholder="Describe the other challenge"/>`}</${Field}>
+  <${Field} label="People on the patrol, by agency" id="pe-pt" wide=${true}><div className="partsgrid">${AGENCIES.map(a=>html`<label key=${a[0]} className="pg"><span>${a[1]}</span><input type="number" min="0" aria-label=${a[1]} value=${f.parts[a[0]]||''} onChange=${e=>setF(o=>({...o,parts:{...o.parts,[a[0]]:e.target.value}}))}/></label>`)}</div></${Field}>
+  <h4 className="mini-h wide">Form 1A rows (fisher checks and infringements, ${enc.length})</h4>
+  <div className="wide encedit">${enc.map((e,i)=>html`<fieldset key=${i} className="encrow"><legend>Row ${i+1}${e.fromEntryLog?' (from the entry log)':''}</legend>
+   <div className="form">
+   <${Field} label="Time" id=${'ee-t'+i}><${Inp} id=${'ee-t'+i} type="time" value=${e.time||''} onChange=${v=>eu(i,'time',v)}/></${Field}>
+   <${Field} label="Name" id=${'ee-n'+i}><${Inp} id=${'ee-n'+i} value=${e.name||''} onChange=${v=>eu(i,'name',v)}/></${Field}>
+   <${Field} label="ID number" id=${'ee-i'+i}><${Inp} id=${'ee-i'+i} value=${e.id||''} onChange=${v=>eu(i,'id',v)}/></${Field}>
+   <${Field} label="Phone" id=${'ee-p'+i}><${Inp} id=${'ee-p'+i} type="tel" value=${e.phone||''} onChange=${v=>eu(i,'phone',v)}/></${Field}>
+   <${Field} label="Gear type" id=${'ee-g'+i}><${Inp} id=${'ee-g'+i} value=${e.gear||''} onChange=${v=>eu(i,'gear',v)}/></${Field}>
+   <${Field} label="Gear ID" id=${'ee-gi'+i}><${Inp} id=${'ee-gi'+i} value=${e.gearId||''} onChange=${v=>eu(i,'gearId',v)}/></${Field}>
+   <${Field} label="Quantity" id=${'ee-q'+i}><${Inp} id=${'ee-q'+i} value=${e.qty||''} onChange=${v=>eu(i,'qty',v)}/></${Field}>
+   <${Field} label="Fishing ground" id=${'ee-f'+i}><${Inp} id=${'ee-f'+i} value=${e.ground||''} onChange=${v=>eu(i,'ground',v)}/></${Field}>
+   <${Field} label="BMU origin" id=${'ee-o'+i}><${Inp} id=${'ee-o'+i} value=${e.origin||''} onChange=${v=>eu(i,'origin',v)}/></${Field}>
+   <${Field} label="Infringement code" id=${'ee-c'+i}><${Sel} id=${'ee-c'+i} value=${e.code||''} onChange=${v=>eu(i,'code',v)} opts=${[['','None'],...(LOOK.infringements||[]).map(x=>[x.code,x.code+'. '+x.label])]}/></${Field}>
+   <${Field} label="Action taken" id=${'ee-a'+i}><${Inp} id=${'ee-a'+i} value=${e.action||''} onChange=${v=>eu(i,'action',v)}/></${Field}>
+   <${Field} label="Details" id=${'ee-d'+i} wide=${true}><${Inp} id=${'ee-d'+i} value=${e.details||''} onChange=${v=>eu(i,'details',v)}/></${Field}>
+   <${Field} label="Seized" id=${'ee-s'+i}><label className="chk"><input type="checkbox" checked=${!!e.seized} onChange=${x=>eu(i,'seized',x.target.checked)}/> Gear seized or confiscated</label></${Field}>
+   </div><button type="button" className="btn small" onClick=${()=>setEnc(a=>a.filter((_,j)=>j!==i))}>Remove row</button></fieldset>`)}
+   <button type="button" className="btn small" onClick=${()=>setEnc(a=>[...a,{n:a.length+1,time:'',name:'',id:'',phone:'',gear:'',gearId:'',qty:'',ground:'',origin:'',code:'',action:'',details:'',seized:false}])}>Add a row</button></div>
   <div className="form-foot wide"><${Btn} onClick=${onClose}>Cancel</${Btn}><${Btn} kind="primary" id="pe-save" onClick=${save}>Save changes</${Btn}></div></div>`;
 };
 
 const IncEdit=({i,onClose})=>{
  const {setIncidents,log,toast}=useApp();
- const [f,setF]=useState(()=>({iso:i.iso||'',time:i.time||'',cat:i.cat,ranger:i.ranger,patrol:i.patrol,desc:i.desc,persons:(i.personsList||[]).map(x=>x.name).join(', '),code:i.code||'',action:i.action==='—'?'':i.action,ref:i.ref,stage:i.stage,loc:i.loc}));
+ const [pls,setPls]=useState(()=>(i.personsList&&i.personsList.length?i.personsList:(i.persons&&i.persons!=='Not identified'?cleanNames(i.persons).map(n=>({name:n,id:'',phone:''})):[])).map(x=>({...x})));
+ const pu=(k,key,v)=>setPls(a=>a.map((x,j)=>j===k?{...x,[key]:v}:x));
+ const [f,setF]=useState(()=>({iso:i.iso||'',time:i.time||'',cat:i.cat,ranger:i.ranger,patrol:i.patrol,desc:i.desc,persons:'',code:i.code||'',action:i.action==='—'?'':i.action,ref:i.ref,stage:i.stage,loc:i.loc}));
  const u=(k,v)=>setF(o=>({...o,[k]:v}));
  const save=()=>{
-  const ns=cleanNames(f.persons);const old=i.personsList||[];
-  const pl=ns.map(n=>old.find(o=>o.name===n)||{name:n,id:'',phone:''});
+  const pl=pls.filter(x=>(x.name||'').trim()).map(x=>({...x,name:x.name.trim()}));
   setIncidents(x=>x.map(q=>q.id===i.id?{...q,iso:f.iso||q.iso,date:f.iso?isoLabel(f.iso):q.date,time:f.time,cat:f.cat,ranger:f.ranger,patrol:f.patrol,desc:f.desc,personsList:pl,persons:pl.length?pl.map(p=>p.name).join(', '):'Not identified',personsUnknown:!pl.length,code:f.code,action:f.action||'—',ref:f.ref,stage:+f.stage,loc:f.loc,edited:new Date().toISOString()}:q));
   log('Edited incident','Events & Incidents',i.id);toast('Incident '+i.id+' saved');onClose();
  };
@@ -56,7 +86,7 @@ const IncEdit=({i,onClose})=>{
   <${Field} label="Infringement code" id="ie-k"><${Sel} id="ie-k" value=${f.code} onChange=${v=>u('code',v)} opts=${[['','None'],...(LOOK.infringements||[]).map(x=>[x.code,x.code+'. '+x.label])]}/></${Field}>
   <${Field} label="Reported by" id="ie-r"><${Inp} id="ie-r" value=${f.ranger} onChange=${v=>u('ranger',v)}/></${Field}>
   <${Field} label="Patrol reference" id="ie-p"><${Inp} id="ie-p" value=${f.patrol} onChange=${v=>u('patrol',v)}/></${Field}>
-  <${Field} label="Persons involved (separate with commas)" id="ie-n" wide=${true}><${Inp} id="ie-n" value=${f.persons} onChange=${v=>u('persons',v)}/></${Field}>
+  <${Field} label="Persons involved" id="ie-n" wide=${true}>${pls.map((x,k)=>html`<div className="addrow" key=${k}><input aria-label=${'Person '+(k+1)+' name'} placeholder="Name" value=${x.name||''} onChange=${e=>pu(k,'name',e.target.value)}/><input aria-label=${'Person '+(k+1)+' ID'} placeholder="ID no." value=${x.id||''} onChange=${e=>pu(k,'id',e.target.value)}/><input aria-label=${'Person '+(k+1)+' phone'} placeholder="Phone" value=${x.phone||''} onChange=${e=>pu(k,'phone',e.target.value)}/><button type="button" className="btn small" onClick=${()=>setPls(a=>a.filter((_,j)=>j!==k))}>Remove</button></div>`)}<button type="button" className="btn small" onClick=${()=>setPls(a=>[...a,{name:'',id:'',phone:''}])}>Add a person</button></${Field}>
   <${Field} label="Description" id="ie-ds" wide=${true}><${TA} id="ie-ds" value=${f.desc} onChange=${v=>u('desc',v)}/></${Field}>
   <${Field} label="Action taken" id="ie-a"><${Inp} id="ie-a" value=${f.action} onChange=${v=>u('action',v)}/></${Field}>
   <${Field} label="Referred to" id="ie-f"><${Sel} id="ie-f" value=${f.ref} onChange=${v=>u('ref',v)} opts=${['None',...REFER]}/></${Field}>
