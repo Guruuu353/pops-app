@@ -10,7 +10,7 @@ const { start, browser, login } = require('./harness');
   // patrol with several BMUs, agencies, other leader
   await ap.goto(S.base + '/#patrols'); await ap.waitForSelector('text=Patrols & Field Activities');
   await ap.click('button:has-text("New patrol"), button:has-text("Create")');
-  await ap.click('button:has-text("Joint with other BMUs")');
+  await ap.click('button:has-text("Joint patrol")');
   await ap.click('label:has-text("Shela BMU") input'); await ap.click('label:has-text("Faza BMU") input');
   await ap.fill('[aria-label="Other BMU name"]', 'Siyu BMU'); await ap.click('.modal button:has-text("Add") >> nth=0');
   await ap.click('label:has-text("Kenya Wildlife Service") input'); await ap.click('label:has-text("Kenya Forest") input').catch(() => {});

@@ -104,7 +104,7 @@ const TRACKS=[];
 const MAPITEMS=[];
 const LAYERS=[
  {id:'patrols',label:'Patrols',shape:'line',color:'var(--c1)'},
- {id:'incidents',label:'Incidents',shape:'tri',color:'var(--coral)'},
+ {id:'incidents',label:'Incidents',shape:'pin',color:'var(--coral)'},
  {id:'restoration',label:'Restoration',shape:'dia',color:'var(--good)'},
  {id:'zones',label:'LMMA zones',shape:'zone',color:'var(--zone-gear)'},
  {id:'boats',label:'Boats on patrol',shape:'sq',color:'var(--info)'},
@@ -120,9 +120,9 @@ const LAYERS=[
 const LAYER_ACCESS={
  admin:['patrols','incidents','restoration','zones','boats','rangers','activity','wildlife','habitat','projects','staff','sos','bmus'],
  board:['patrols','incidents','restoration','zones','boats','rangers','wildlife','habitat','projects','staff','sos','bmus'],
- ranger:['patrols','incidents','zones','wildlife','habitat','boats','rangers','activity','sos','bmus'],
- cox:['patrols','zones','boats','rangers','sos','bmus'],
- officer:['restoration','zones','wildlife','habitat','projects','sos','bmus'],
+ ranger:['patrols','incidents','zones','wildlife','habitat','boats','rangers','activity','sos','bmus','staff'],
+ cox:['patrols','zones','boats','rangers','sos','bmus','staff'],
+ officer:['restoration','zones','wildlife','habitat','projects','sos','bmus','staff'],
  fisheries:['patrols','zones','restoration','wildlife','habitat','projects','rangers','activity','bmus'],
  bmu:['patrols','zones','projects'],
  tourfin:[]

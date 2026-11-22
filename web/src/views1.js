@@ -2,7 +2,7 @@
 /* newest first: sort records by date and start time, latest at the top */
 const newestKey=p=>{const t=/^(\d{1,2}):(\d{2})/.exec(p.start||p.time||'');return (patrolIso(p)||'')+' '+(t?pad(+t[1])+':'+t[2]:'');};
 const newest=a=>a.map(x=>[newestKey(x),x]).sort((x,y)=>y[0]<x[0]?-1:y[0]>x[0]?1:0).map(x=>x[1]);
-const incItem=i=>({id:i.id,layer:'incidents',x:i.x!=null?i.x:proj(i.lat,i.lon)[0],y:i.y!=null?i.y:proj(i.lat,i.lon)[1],title:i.cat,when:i.date,team:i.ranger+' ('+i.patrol+')',desc:i.desc,status:STAGES[i.stage],follow:i.action+(i.ref!=='None'?'. Referral: '+i.ref:''),loc:i.loc,ref:i.id});
+const incItem=i=>({id:i.id,layer:'incidents',x:i.x!=null?i.x:proj(i.lat,i.lon)[0],y:i.y!=null?i.y:proj(i.lat,i.lon)[1],title:i.cat,when:i.date,team:i.ranger+' ('+i.patrol+')',desc:i.desc,status:STAGES[i.stage],follow:i.action+(i.ref!=='None'?'. Referral: '+i.ref:''),loc:i.loc,ref:i.id,iso:patrolIso({date:i.date,iso:i.iso}),pid:i.patrol});
 const Photos=({imgs})=>imgs&&imgs.length?html`<div className="photos">${imgs.map((src,i)=>html`<${FileLink} key=${i} className="ph" f=${{url:src,name:'Photograph '+(i+1)+'.jpg',mime:'image/jpeg'}}><img src=${src} alt=${'Photograph '+(i+1)}/></${FileLink}>`)}</div>`:html`<p className="muted small">No photographs attached.</p>`;
 
 /* which map content a role may see */
@@ -10,10 +10,11 @@ const useMapData=()=>{
  const {role,incidents,assign,bmuId,patrols,account,coral,sos}=useApp();
  const me=account.name;
  const [staffPos,setStaffPos]=useState([]);
- useEffect(()=>{if(!['admin','board'].includes(role))return;let on=true;const f=()=>api('GET','/pos').then(r=>{if(on)setStaffPos(r.staff||[]);}).catch(()=>{});f();const i=setInterval(f,30000);return()=>{on=false;clearInterval(i);};},[role]);
+ useEffect(()=>{if(!['admin','board','officer','ranger','cox'].includes(role))return;let on=true;const f=()=>api('GET','/pos').then(r=>{if(on)setStaffPos(r.staff||[]);}).catch(()=>{});f();const i=setInterval(f,30000);return()=>{on=false;clearInterval(i);};},[role]);
  const allowed=LAYER_ACCESS[role]||[];
  const vis=p=>role==='admin'||role==='board'||role==='fisheries'||(role==='bmu'&&p.bmu===bmuId)||(role==='ranger'&&(p.rangers||[]).includes(me))||(role==='cox'&&p.cox===me);
- const tracks=patrols.filter(p=>p.track&&p.track.length>1&&p.status!=='Draft'&&vis(p)).map(p=>({id:p.id,status:p.status,bmu:p.bmu,ll:p.track,stops:p.stops,km:patrolKm(p)}));
+ const allTr=patrols.filter(p=>p.track&&p.track.length>1&&p.status!=='Draft'&&vis(p)).map(p=>({id:p.id,status:p.status,bmu:p.bmu,ll:p.track,stops:p.stops,km:patrolKm(p),date:patrolIso(p),leader:p.leader||'',dateTxt:p.date}));
+ const tracks=allTr.filter(t=>t.status==='Active'||t.status==='Paused');
  const inc=((role==='admin'||role==='board')?incidents:role==='ranger'?incidents.filter(i=>i.ranger===me):[]).filter(i=>i.x!=null||i.lat!=null);
  const sites=(coral||[]).filter(c=>c.kind==='site'&&c.lat!=null&&c.lon!=null&&allowed.includes('restoration')).filter(c=>role!=='officer'||(assign[account.id]||[]).length).map(c=>{const [x,y]=proj(c.lat,c.lon);return {id:c.id,layer:'restoration',x,y,title:c.name,when:c.date,team:c.team||'',desc:c.desc||c.meth||'',status:'Logged',follow:''};});
  const act=allowed.includes('activity'),rg=allowed.includes('rangers')||allowed.includes('boats');
@@ -22,7 +23,7 @@ const useMapData=()=>{
  const staffTracks=allowed.includes('staff')?staffPos.filter(u=>u.trail&&u.trail.length>1).map(u=>({id:'sttrk-'+u.id,status:'Active',bmu:'',ll:u.trail.map(t=>[t[0],t[1]])})):[];
  const sosItems=allowed.includes('sos')?sos.filter(x=>['Active','Acknowledged'].includes(x.status)&&x.lat!=null).map(x=>{const [px,py]=proj(x.lat,x.lon);return {id:'sos-'+x.id,layer:'sos',x:px,y:py,title:'SOS: '+x.by,when:new Date(x.at).toLocaleTimeString('en-GB',{hour:'numeric',minute:'2-digit',hour12:true}),team:x.phone||'',desc:x.kind+(x.note?' · '+x.note:'')+' · '+x.zone,status:x.status,follow:'Call the ranger and send help. Mark it resolved on the red bar.'};}):[];
  const bmuItems=allowed.includes('bmus')?BMUS.filter(b=>b.lat&&b.lon).map(b=>{const [px,py]=proj(b.lat,b.lon);return {id:'bmu-'+b.id,layer:'bmus',x:px,y:py,title:b.name,when:'',team:'',desc:b.other?'Neighbouring BMU':'Patte project BMU',status:'Logged',follow:''};}):[];
- return {allowed,tracks:[...tracks,...staffTracks],items:[...sites,...inc.map(incItem),...pItems,...staffItems,...sosItems,...bmuItems]};
+ return {allowed,tracks:[...tracks,...staffTracks],allTracks:allTr,items:[...sites,...inc.map(incItem),...pItems,...staffItems,...sosItems,...bmuItems]};
 };
 
 /* ---------- what happened on a patrol: timeline and map items ---------- */
@@ -74,16 +75,52 @@ const progressAlerts=(patrols,settings,now=Date.now())=>{
 };
 
 /* ---------- Live Operations Map ---------- */
+const RPAL=['#35A7FF','#FF8A3D','#B26BFF','#2CD9A0','#FF5C8A','#E6C229','#5CC8FF','#9BE564'];
+const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
 const LiveMap=()=>{
- const {role,bmuId,focusRef}=useApp();
- const {allowed,tracks,items}=useMapData();
+ const {role,bmuId,focusRef,account,toast,openAt}=useApp();
+ const {allowed,tracks,allTracks,items}=useMapData();
  const [layers,setLayers]=useState(allowed);
  useEffect(()=>setLayers(allowed),[role]);
  const [sel,setSel]=useState(null);
- useEffect(()=>{const f=focusRef.current;if(f&&f.mod==='live-map'&&f.sos){const it=items.find(i=>i.id==='sos-'+f.id);if(it){setSel(it);focusRef.current=null;}}if(f&&f.mod==='live-map'&&f.patrol){const it=items.find(i=>i.id==='rg-'+f.id);if(it){setSel(it);}focusRef.current=null;}},[items.length]);
+ /* routes: live patrols only by default. Choose all patrols or only patrols with incidents for a period. */
+ const [rm,setRm]=useState('live');const [per,setPer]=useState('7');const [d1,setD1]=useState('');const [d2,setD2]=useState('');
+ const [focus,setFocus]=useState(null);const [fitKey,setFitKey]=useState('');
+ /* my own position on the map, and whether others may see it */
+ const [me,setMe]=useState(false);const [myPos,setMyPos]=useState(null);const [fol,setFol]=useState(false);
+ const [shr,setShr]=useState(()=>{try{return localStorage.getItem('pops-share')==='1';}catch(e){return false;}});
+ const lastPost=useRef(0);
+ useEffect(()=>{if(!me)return;if(!navigator.geolocation){toast('This device cannot give its position');setMe(false);return;}
+  const id=navigator.geolocation.watchPosition(p=>{const pos={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};setMyPos(pos);const n=Date.now();let on=false;try{on=localStorage.getItem('pops-share')==='1';}catch(e){}if(on&&n-lastPost.current>45000){lastPost.current=n;let doing='';try{doing=localStorage.getItem('pops-doing')||'';}catch(e){}api('POST','/pos',{lat:pos.lat,lon:pos.lon,acc:pos.acc,doing}).catch(()=>{});}},()=>{toast('Could not get your position. Allow location for this site.');setMe(false);},{enableHighAccuracy:true,maximumAge:5000,timeout:30000});
+  return()=>{navigator.geolocation.clearWatch(id);setMyPos(null);};},[me]);
+ const setShare=v=>{setShr(v);try{localStorage.setItem('pops-share',v?'1':'0');}catch(e){}window.dispatchEvent(new Event('pops-share'));if(v)setMe(true);toast(v?'Others can now see where you are':'You are hidden from the map for others');};
+ useEffect(()=>{const f=focusRef.current;if(f&&f.mod==='live-map'&&f.sos){const it=items.find(i=>i.id==='sos-'+f.id);if(it){setSel(it);focusRef.current=null;}}
+  if(f&&f.mod==='live-map'&&f.patrol){const it=items.find(i=>i.id==='rg-'+f.id);if(it)setSel(it);if(allTracks.some(t=>t.id===f.id)){setFocus(f.id);setFitKey(f.id+':'+Date.now());}focusRef.current=null;}},[items.length,allTracks.length]);
  const tog=id=>setLayers(l=>l.includes(id)?l.filter(x=>x!==id):[...l,id]);
- const pick=i=>setSel(i.detail&&!i.when?{...i,title:i.detail.title,rows:i.detail.rows,chip:i.detail.chip}:i);
+ const selPid=focus||(sel&&sel.id&&String(sel.id).startsWith('t-')?String(sel.id).slice(2):null);
+ const pick=i=>{setSel(i.detail&&!i.when?{...i,title:i.detail.title,rows:i.detail.rows,chip:i.detail.chip}:i);if(i.id&&String(i.id).startsWith('t-')&&focus&&String(i.id)!=='t-'+focus)setFocus(null);};
  const loc=i=>{if(i.loc==='sensitive'&&role==='board')return 'Restricted. Exact enforcement coordinates are limited to the Super Admin and the reporting ranger.';const [la,lo]=unproj(i.x,i.y);return toDMS(la,'N','S')+' / '+toDMS(lo,'E','W');};
+ /* period */
+ const today=isoToday();
+ const range=per==='1'?[today,today]:per==='7'?[addDays(today,-6),today]:per==='30'?[addDays(today,-29),today]:per==='month'?[today.slice(0,8)+'01',today]:[d1||'0000-00-00',d2||'9999-99-99'];
+ const inPer=d=>!!d&&d>=range[0]&&d<=range[1];
+ const incAll=items.filter(i=>i.layer==='incidents');
+ const incPatrols=new Set(incAll.map(i=>i.pid).filter(Boolean));
+ let trs=[...tracks];
+ if(rm!=='live'&&allowed.includes('patrols')){const have=new Set(trs.map(t=>t.id));allTracks.filter(t=>inPer(t.date)&&(rm==='all'||incPatrols.has(t.id))).forEach(t=>{if(!have.has(t.id))trs.push(t);});}
+ if(focus&&!trs.some(t=>t.id===focus)){const t=allTracks.find(x=>x.id===focus);if(t)trs.push(t);}
+ const live=t=>t.status==='Active'||t.status==='Paused';
+ trs=trs.map(t=>live(t)||String(t.id).startsWith('sttrk-')?t:{...t,color:RPAL[[...String(t.id)].reduce((a,c)=>a+c.charCodeAt(0),0)%RPAL.length]});
+ const shownKm=trs.filter(t=>!String(t.id).startsWith('sttrk-')).reduce((a,t)=>a+(+t.km||0),0);const shownN=trs.filter(t=>!String(t.id).startsWith('sttrk-')).length;
+ /* incidents: highlight those of the selected patrol, hide those outside the period when looking back */
+ const shownItems=items.flatMap(i=>{if(i.layer!=='incidents')return [i];
+  if(selPid)return [i.pid===selPid?{...i,hl:true}:{...i,dim:true}];
+  if(rm!=='live')return inPer(i.iso)?[i]:[];
+  return [i];});
+ const nInc=shownItems.filter(i=>i.layer==='incidents'&&!i.dim).length;
+ const staffOut=me&&myPos?shownItems.filter(i=>i.id!=='st-'+account.id):shownItems;
+ const selPatrolItem=selPid&&allTracks.find(t=>t.id===selPid);
+ const lbl={live:'Live routes only',all:'All patrols',inc:'Patrols with incidents'};
  return html`<div>
  <${PageHead} title="Live Operations Map" sub="Iweni LMMA and surrounding waters. You only see the layers your role allows."/>
  ${allowed.length===0?html`<${Denied} mod="The Live Operations Map" role=${role}/>`:html`
@@ -91,15 +128,26 @@ const LiveMap=()=>{
   <div className="mapcol">
    <div className="mapbar"><div className="chips">${LAYERS.map(l=>html`<button key=${l.id} className=${'fchip '+(layers.includes(l.id)?'on':'')+(allowed.includes(l.id)?'':' locked')} disabled=${!allowed.includes(l.id)} onClick=${()=>tog(l.id)} aria-pressed=${layers.includes(l.id)} title=${allowed.includes(l.id)?'':'Not available for this role'}>${!allowed.includes(l.id)&&html`<${Icon} n="lock" s=${12}/>`}${l.label}</button>`)}</div>
    </div>
-   <div className="mapbox big"><${OpsMap} layers=${layers} items=${items} tracks=${tracks} sel=${sel&&sel.id} onSel=${pick} showPts=${layers.includes("zones")} points=${LMMA_PTS}/>
+   ${allowed.includes('patrols')&&html`<div className="routebar" role="group" aria-label="Routes to show">
+    <div className="seg">${Object.keys(lbl).map(k=>html`<button key=${k} type="button" className=${'segb '+(rm===k?'on':'')} aria-pressed=${rm===k} onClick=${()=>{setRm(k);if(k==='live')setFocus(null);setFitKey('m'+k+Date.now());}}>${lbl[k]}</button>`)}</div>
+    ${rm!=='live'&&html`<select aria-label="Period" value=${per} onChange=${e=>{setPer(e.target.value);setFitKey('p'+e.target.value+Date.now());}}><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="month">This month</option><option value="custom">Choose dates</option></select>${per==='custom'&&html`<span className="btnrow"><input type="date" aria-label="From date" value=${d1} onChange=${e=>setD1(e.target.value)}/><input type="date" aria-label="To date" value=${d2} onChange=${e=>setD2(e.target.value)}/></span>`}`}
+    <span className="rinfo">${shownN} route${shownN===1?'':'s'}${shownN?' · '+shownKm.toFixed(1)+' km':''}${nInc?' · '+nInc+' incident'+(nInc===1?'':'s'):''}</span>
+    ${focus&&html`<button type="button" className="btn small" onClick=${()=>{setFocus(null);setSel(null);}}>Hide route of ${focus}</button>`}
+   </div>`}
+   <div className="mapbox big"><${OpsMap} layers=${layers} items=${staffOut} tracks=${trs} sel=${sel&&sel.id} onSel=${pick} showPts=${layers.includes("zones")} points=${LMMA_PTS} myPos=${me?myPos:null} follow=${fol&&me} fitTo=${fitKey}/>
 </div>
    <div className="mapfoot"><${MapLegend} layers=${layers}/><${OfflineMapBtn} base="sat"/></div>
+   <div className="mylocbar"><button type="button" className=${'btn small '+(me?'primary':'')} aria-pressed=${me} onClick=${()=>{setMe(v=>!v);if(me){setFol(false);}}}><${Icon} n="map" s=${14}/> ${me?(myPos?'My location on':'Finding me…'):'Show my location'}</button>
+    ${me&&html`<label className="rowx"><input type="checkbox" checked=${fol} onChange=${e=>setFol(e.target.checked)}/> Follow me</label>`}
+    <label className="rowx"><input type="checkbox" checked=${shr} onChange=${e=>setShare(e.target.checked)}/> Let others see me on the map</label></div>
   </div>
   <aside className="mapside">
    ${sel?html`<${Card} title=${sel.title} right=${html`<button className="iconbtn" aria-label="Clear selection" onClick=${()=>setSel(null)}><${Icon} n="x" s=${16}/></button>`}>
     <${KV} rows=${sel.rows?[...(sel.chip?[['Kind',html`<${Chip} t=${sel.chip}/>`]]:[]),...sel.rows]:[['Date and time',sel.when],['Location',loc(sel)],['Assigned team',sel.team],['Description',sel.desc],['Status',html`<${Chip} t=${sel.status}/>`],['Follow-up actions',sel.follow]]}/>
+    ${selPatrolItem&&html`<p className="small" style=${{margin:'10px 0 4px'}}>${incAll.filter(i=>i.pid===selPid).length} incident${incAll.filter(i=>i.pid===selPid).length===1?'':'s'} on this patrol are highlighted on the map.</p><button type="button" className="btn small primary" onClick=${()=>openAt('patrols',selPid)}>Open patrol ${selPid}</button>`}
 </${Card}>`:
    html`<${Card} title="Select a map item"><p className="muted">Click a marker or a track to see its date and time, location, assigned team, description, photographs, status and follow-up actions.</p>
+   <p className="muted small">Only live patrols show their route. Use the buttons above the map to see all patrols or the patrols with incidents for a period. Open the ☰ list on the map to follow a ranger, boat or staff member.</p>
    <h3 className="mini-h">Your access</h3><p className="muted small">${({admin:'Full authorized visibility.',board:'Full oversight. Exact enforcement locations are generalised.',ranger:'Assigned operational information only.',cox:'Patrols and boats you support.',officer:'Assigned project information only.',fisheries:'Permitted all-project and patrol visibility. Incidents are not shown.',bmu:'Permitted patrol and LMMA information for '+bmuName(bmuId)+'.'})[role]}</p></${Card}>`}
   </aside>
  </div>`}
@@ -248,7 +296,7 @@ const PatrolForm=({onClose})=>{
  <${Field} label="BMU area (main)" id="pb"><${Sel} id="pb" value=${f.bmu} onChange=${s('bmu')} opts=${BMUS.map(b=>[b.id,b.name])}/></${Field}>
  <${Field} label="More BMUs on this patrol (optional, choose any number)" id="pjw" wide=${true}><div className="checks">${BMUS.filter(b=>b.id!==f.bmu).map(b=>html`<label key=${b.id} className="chk"><input type="checkbox" checked=${f.jointWith.includes(b.id)} onChange=${()=>tog('jointWith',b.id)}/> ${b.name}</label>`)}</div>
   <div className="addrow"><input aria-label="Other BMU name" placeholder="Other BMU not listed: type name" value=${otB} onChange=${e=>setOtB(e.target.value)} onKeyDown=${e=>{if(e.key==='Enter'){e.preventDefault();addTxt('bmuOther',otB,setOtB);}}}/><button type="button" className="btn small" onClick=${()=>addTxt('bmuOther',otB,setOtB)}>Add</button></div>${chips('bmuOther')}</${Field}>
- ${f.mode==='joint'&&html`<${Field} label="Agencies joining (KWS, KFS and others)" id="pag" wide=${true}><div className="checks">${AGENCIES.filter(a=>a[0]!=='bmu'&&a[0]!=='other').map(a=>html`<label key=${a[0]} className="chk"><input type="checkbox" checked=${f.agencies.includes(a[0])} onChange=${()=>tog('agencies',a[0])}/> ${a[1]}</label>`)}</div>
+ ${f.mode==='joint'&&html`<${Field} label="Agencies joining (KeFS, KFS, KWS, Police and others)" id="pag" wide=${true}><div className="checks">${AGENCIES.filter(a=>a[0]!=='bmu'&&a[0]!=='other').map(a=>html`<label key=${a[0]} className="chk"><input type="checkbox" checked=${f.agencies.includes(a[0])} onChange=${()=>tog('agencies',a[0])}/> ${a[1]}</label>`)}</div>
   <div className="addrow"><input aria-label="Other agency name" placeholder="Other agency or group: type name" value=${otA} onChange=${e=>setOtA(e.target.value)} onKeyDown=${e=>{if(e.key==='Enter'){e.preventDefault();addTxt('partnersOther',otA,setOtA);}}}/><button type="button" className="btn small" onClick=${()=>addTxt('partnersOther',otA,setOtA)}>Add</button></div>${chips('partnersOther')}<small className="muted">The ranger sees these when starting and can confirm or change them if the team changed.</small></${Field}>`}
  <${Field} label="Alert if no update after" id="pam"><${Sel} id="pam" value=${String(f.alertMin||defMin)} onChange=${s('alertMin')} opts=${[['30','30 minutes'],['60','1 hour'],['120','2 hours'],['150','2.5 hours'],['180','3 hours'],['240','4 hours']]}/></${Field}>
  <${Field} label="Date" id="pd"><${Inp} id="pd" type="date" value=${f.date} onChange=${s('date')}/></${Field}>
@@ -265,7 +313,7 @@ const PatrolForm=({onClose})=>{
  <div className="form-foot wide"><${Btn} onClick=${onClose}>Cancel</${Btn}><${Btn} kind="primary" onClick=${save}>Create and assign</${Btn}></div></div>`;
 };
 const Patrols=()=>{
- const {role,patrols,setPatrols,bmuId,log,toast,can,settings}=useApp();
+ const {role,patrols,setPatrols,bmuId,log,toast,can,settings,incidents,openAt}=useApp();
  const me=ROLES[role].user;
  const palerts=['admin','fisheries'].includes(role)?progressAlerts(patrols,settings):[];
  const {focusRef}=useApp();
@@ -292,7 +340,7 @@ const Patrols=()=>{
  ${cur&&dt==='time'&&html`<${PatrolTimeline} p=${cur}/>`}
  ${cur&&dt==='forms'&&html`<${PatrolForms} key=${cur.id} p=${cur}/>`}
  ${cur&&dt==='info'&&html`<${KV} rows=${[['Status',html`<${Chip} t=${cur.status}/>`],['Patrol date',cur.date],['Start / end time',cur.start+' / '+cur.end],['Patrol leader',cur.leader],['Participating rangers',(cur.rangers||[]).join(', ')],['Boat',cur.boat],['Coxswain',cur.cox],['BMU area',bmuName(cur.bmu)],['Objective',cur.objective],...(cur.imported?[['Observations (paper log)',cur.observations||'—'],['Challenges (paper log)',cur.challenges||'—'],['Action taken (paper log)',cur.action||'—'],['Source',cur.source]]:[]),['Fisher checks / infringements',(cur.enc||[]).length+' / '+(cur.enc||[]).filter(e=>e.code).length],['Items seized (Form DF/SZ)',(cur.seiz||[]).length],['Observations recorded',cur.obs],['Incidents reported',cur.inc],['Distance',patrolKm(cur)?patrolKm(cur).toFixed(2)+' km'+(cur.kmEst?' (about '+cur.kmEst.toFixed(2)+' km of it estimated over signal gaps)':''):'—'],['Equipment used',cur.equip.length?cur.equip.join(', '):'—'],['Action taken',cur.action],['Review status',cur.review]]}/>
- <h3 className="mini-h">GPS track</h3>${(()=>{const t=cur.track&&cur.track.length>1?[{id:cur.id,status:cur.status,ll:cur.track,stops:cur.stops,km:patrolKm(cur)}]:[];return t.length?html`<${TrackStats} p=${cur}/><div className="mapbox"><${OpsMap} key=${cur.id} layers=${['zones','patrols','activity','rangers','boats']} items=${patrolItems(cur,{activity:true})} tracks=${t} sel=${null} fit="tracks" compact=${true} height=${260}/></div>`:html`<p className="muted small">${cur.status==='Planned'||cur.status==='Overdue'?'No track yet. GPS tracking only runs during an assigned and started patrol.':'No GPS track was recorded for this patrol.'}</p>`;})()}
+ <h3 className="mini-h">GPS track</h3>${(()=>{const t=cur.track&&cur.track.length>1?[{id:cur.id,status:cur.status,ll:cur.track,stops:cur.stops,km:patrolKm(cur)}]:[];return t.length?html`<${TrackStats} p=${cur}/><div className="mapbox"><${OpsMap} key=${cur.id} layers=${['zones','patrols','activity','rangers','boats','incidents']} items=${[...patrolItems(cur,{activity:true}),...((['admin','board','ranger'].includes(role)?incidents:[]).filter(i=>i.patrol===cur.id&&(i.x!=null||i.lat!=null)).map(i=>({...incItem(i),hl:true})))]} tracks=${t} sel=${null} fit="tracks" compact=${true} height=${260}/></div><p className="small" style=${{margin:'8px 0'}}>${(['admin','board','ranger'].includes(role)?incidents:[]).filter(i=>i.patrol===cur.id).length} incident(s) on this route are marked with red pins. <button type="button" className="link" onClick=${()=>openAt('live-map',cur.id,{patrol:true})}>Show this route on the live map</button></p>`:html`<p className="muted small">${cur.status==='Planned'||cur.status==='Overdue'?'No track yet. GPS tracking only runs during an assigned and started patrol.':'No GPS track was recorded for this patrol.'}</p>`;})()}
  <h3 className="mini-h">Photographs</h3><${Photos} imgs=${(cur.photos||[]).map(p=>p.url)}/>
  <h3 className="mini-h">Scanned pages</h3><${ScanBox} rec=${cur} canEdit=${adm} set=${fn=>setPatrols(x=>x.map(q=>q.id===cur.id?fn(q):q))}/>`}
  </${Drawer}>
@@ -302,7 +350,7 @@ const Patrols=()=>{
 };
 
 /* ---------- Incidents ---------- */
-const REFER=['KWS','KFS','Fisheries Department','Police','County government','Other'];
+const REFER=['KWS','KFS (Forest Service)','KeFS (Fisheries Service)','Fisheries Department','Kenya Police Service','Administration Police','DCI','Kenya Coast Guard','County government','Other'];
 const IncidentForm=({onClose})=>{
  const {setIncidents,log,toast,user}=useApp();
  const [f,setF]=useState({cat:INC_CATS[0],date:isoToday(),time:hhmm(),code:'',desc:'',unknown:false,persons:[{name:'',id:'',phone:''}],lat:'',lon:''});
@@ -336,7 +384,7 @@ const Incidents=()=>{
  const hasLoc=cur&&(cur.lat!=null||cur.x!=null);
  const ll=cur&&hasLoc?(cur.lat!=null?[cur.lat,cur.lon]:unproj(cur.x,cur.y)):null;
  return html`<div><${PageHead} title="Events & Incidents" sub="Report, review, refer, monitor and close">${write&&html`<${Btn} kind="primary" icon="plus" onClick=${()=>setMk(true)}>Report incident</${Btn}>`}</${PageHead}>
- <${Notice} tone="info" title="Records only">POps records and tracks incidents. It does not give enforcement powers. Referrals go to KWS, KFS, the Fisheries Department, Police and other authorities.</${Notice}>
+ <${Notice} tone="info" title="Records only">POps records and tracks incidents. It does not give enforcement powers. Referrals go to KWS, KFS, KeFS, the Fisheries Department, Police and other authorities.</${Notice}>
  <${Card}><div className="toolbar"><div className="chips"><select aria-label="Filter by category" value=${cat} onChange=${e=>setCat(e.target.value)}><option>All</option>${INC_CATS.map(c=>html`<option key=${c}>${c}</option>`)}</select></div></div>
  <${Table} exp="Incidents" empty="No incidents recorded." sel=${open} onRow=${r=>setOpen(r.id)} cols=${[{h:'Reference',k:'id',cls:'mono'},{h:'Date and time',k:'date',r:r=>r.date+(r.time?', '+r.time:'')},{h:'Category',k:'cat'},{h:'Reported by',k:'ranger'},{h:'Referral',k:'ref'},{h:'Stage',k:'stage',r:r=>html`<${Chip} t=${STAGES[r.stage]} tone=${r.stage===0?'warn':r.stage===4?'neutral':'info'}/>`}]} rows=${list}/></${Card}>
  <${Drawer} open=${!!cur} onClose=${()=>setOpen(null)} title=${cur?cur.id:''} sub=${cur?cur.cat:''} foot=${cur&&(adm||(write&&cur.stage<4))?html`<span className="btnrow">${adm&&html`<${Btn} kind="small" id="i-edit" onClick=${()=>setEd(true)}>Edit</${Btn}><${Btn} kind="small" id="i-del" onClick=${()=>setDl(true)}>Delete</${Btn}>`}${write&&cur.stage<4&&html`${cur.stage===1&&html`<${Sel} id="refa" value=${auth} onChange=${setAuth} opts=${REFER}/>`}<${Btn} kind="primary" onClick=${adv}>${['Start review','Record referral','Start monitoring','Close case'][cur.stage]}</${Btn}>`}</span>`:null}>

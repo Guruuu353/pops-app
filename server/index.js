@@ -148,6 +148,16 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
     audit(user, 'user_updated', 'user', u.id, body);
     return { user: pub(one('SELECT * FROM users WHERE id=?', u.id)) };
   });
+  R('DELETE', '/api/users/:id', true, ({ user, params }) => {
+    adminOnly(user);
+    const u = one('SELECT * FROM users WHERE id=?', params.id); if (!u) throw nf();
+    if (u.id === user.id) throw bad('You cannot delete your own account');
+    if (u.role === 'admin' && one("SELECT COUNT(*) n FROM users WHERE role='admin' AND active=1 AND id<>?", u.id).n < 1) throw bad('At least one active Super Admin must remain');
+    try { run('DELETE FROM project_members WHERE user_id=?', u.id); run("DELETE FROM docs WHERE coll='pos' AND id=?", u.id); run('DELETE FROM users WHERE id=?', u.id); }
+    catch (e) { throw bad('This user has records in the system. Deactivate the account instead so the history stays intact.'); }
+    audit(user, 'user_deleted', 'user', u.id, { name: u.name, email: u.email });
+    return { ok: true };
+  });
   R('POST', '/api/users/:id/reset', true, ({ user, params, body }) => {
     adminOnly(user);
     const e = PW_RULE(body.temp_password); if (e) throw bad(e);
@@ -443,7 +453,7 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
     return { ok: true };
   });
   R('GET', '/api/pos', true, ({ user }) => {
-    if (!['admin', 'board'].includes(user.role)) throw forbid();
+    if (!['admin', 'board', 'officer', 'ranger', 'cox'].includes(user.role)) throw forbid();
     const cutoff = Date.now() - 12 * 3600e3;
     return { staff: q("SELECT data FROM docs WHERE coll='pos'").map((r) => JSON.parse(r.data)).filter((x) => Date.parse(x.at) > cutoff) };
   });

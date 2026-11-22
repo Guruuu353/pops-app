@@ -123,21 +123,22 @@ const HBars=({data,color='var(--c1)',fmt=v=>v})=>{const mx=Math.max(...data.map(
 
 /* ---------- Iweni map ---------- */
 const poly=pts=>pts.map(p=>p.join(',')).join(' ');
-const Marker=({layer,x,y,sel,onClick,label,dim})=>{
+const Marker=({layer,x,y,sel,onClick,label,dim,hl})=>{
  const L=LAYERS.find(l=>l.id===layer);const c=L.color;const s=sel?1.35:1;
  const g=(shape=>{switch(shape){
   case 'tri':return html`<path d="M0,-11 L10,8 L-10,8 Z" fill=${c}/>`;
+  case 'pin':return html`<g><path d="M0,0 C0,0 -11,-11 -11,-17 C-11,-23 -6,-27 0,-27 C6,-27 11,-23 11,-17 C11,-11 0,0 0,0 Z" fill=${c}/><rect x="-1.5" y="-23" width="3" height="9" rx="1.3" fill="#fff" stroke="none"/><circle cy="-10" r="1.9" fill="#fff" stroke="none"/></g>`;
   case 'dia':return html`<path d="M0,-11 L10,0 L0,11 L-10,0 Z" fill=${c}/>`;
   case 'sq':return html`<rect x="-8" y="-8" width="16" height="16" rx="2" fill=${c}/>`;
   case 'hex':return html`<path d="M-5,-9 L5,-9 L10,0 L5,9 L-5,9 L-10,0 Z" fill=${c}/>`;
   case 'flag':return html`<path d="M-6,10 V-10 L9,-5 L-6,0" fill=${c}/>`;
   default:return html`<circle r="8" fill=${c}/>`;}})(L.shape);
- return html`<g className="mk" transform=${`translate(${x},${y}) scale(${s})`} onClick=${onClick} opacity=${dim?.35:1} tabIndex="0" role="button" aria-label=${label} onKeyDown=${e=>{if(e.key==='Enter')onClick();}}><circle r="17" fill="transparent"/><g stroke="var(--surface)" strokeWidth="2.5" strokeLinejoin="round">${g}</g>${sel&&html`<circle r="19" fill="none" stroke="var(--ink)" strokeWidth="2" strokeDasharray="4 3"/>`}<title>${label}</title></g>`;
+ return html`<g className="mk" transform=${`translate(${x},${y}) scale(${s})`} onClick=${onClick} opacity=${dim?.35:1} tabIndex="0" role="button" aria-label=${label} onKeyDown=${e=>{if(e.key==='Enter')onClick();}}><circle cy=${L.shape==='pin'?-13:0} r="17" fill="transparent"/>${hl&&html`<circle cy=${L.shape==='pin'?-13:0} r="22" className="mk-hl"/>`}<g stroke="var(--surface)" strokeWidth="2.5" strokeLinejoin="round">${g}</g>${sel&&html`<circle cy=${L.shape==='pin'?-13:0} r="19" fill="none" stroke="var(--ink)" strokeWidth="2" strokeDasharray="4 3"/>`}<title>${label}</title></g>`;
 };
 const along=(pts,t)=>{const seg=[];let tot=0;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);seg.push(d);tot+=d;}let r=t*tot;for(let i=0;i<seg.length;i++){if(r<=seg[i]){const f=r/seg[i];return[pts[i][0]+(pts[i+1][0]-pts[i][0])*f,pts[i][1]+(pts[i+1][1]-pts[i][1])*f];}r-=seg[i];}return pts[pts.length-1];};
 const useLive=(enabled=true)=>{const [t,setT]=useState(.45);useEffect(()=>{if(!enabled)return;const i=setInterval(()=>setT(v=>v>=.98?.45:v+.012),1100);return()=>clearInterval(i);},[enabled]);return t;};
 
-const MapLegend=({layers})=>html`<ul className="mlegend">${LAYERS.filter(l=>layers.includes(l.id)).map(l=>html`<li key=${l.id}><svg width="16" height="16" viewBox="-12 -12 24 24"><g stroke="var(--surface)" strokeWidth="1.5">${l.shape==='line'?html`<path d="M-10,0 H10" stroke=${l.color} strokeWidth="4"/>`:l.shape==='zone'?html`<rect x="-9" y="-9" width="18" height="18" fill=${l.color} fillOpacity=".4" stroke=${l.color} strokeWidth="2"/>`:l.shape==='tri'?html`<path d="M0,-10 L10,8 L-10,8 Z" fill=${l.color}/>`:l.shape==='dia'?html`<path d="M0,-10 L10,0 L0,10 L-10,0 Z" fill=${l.color}/>`:l.shape==='sq'?html`<rect x="-8" y="-8" width="16" height="16" fill=${l.color}/>`:l.shape==='hex'?html`<path d="M-5,-9 L5,-9 L10,0 L5,9 L-5,9 L-10,0 Z" fill=${l.color}/>`:l.shape==='flag'?html`<path d="M-6,10 V-10 L9,-5 L-6,0" fill=${l.color}/>`:html`<circle r="8" fill=${l.color}/>`}</g></svg>${l.label}</li>`)}</ul>`;
+const MapLegend=({layers})=>html`<ul className="mlegend">${LAYERS.filter(l=>layers.includes(l.id)).map(l=>html`<li key=${l.id}><svg width="16" height="16" viewBox="-12 -12 24 24"><g stroke="var(--surface)" strokeWidth="1.5">${l.shape==='line'?html`<path d="M-10,0 H10" stroke=${l.color} strokeWidth="4"/>`:l.shape==='zone'?html`<rect x="-9" y="-9" width="18" height="18" fill=${l.color} fillOpacity=".4" stroke=${l.color} strokeWidth="2"/>`:l.shape==='tri'?html`<path d="M0,-10 L10,8 L-10,8 Z" fill=${l.color}/>`:l.shape==='pin'?html`<path d="M0,11 C0,11 -9,2 -9,-3 C-9,-8 -5,-11 0,-11 C5,-11 9,-8 9,-3 C9,2 0,11 0,11 Z" fill=${l.color}/>`:l.shape==='dia'?html`<path d="M0,-10 L10,0 L0,10 L-10,0 Z" fill=${l.color}/>`:l.shape==='sq'?html`<rect x="-8" y="-8" width="16" height="16" fill=${l.color}/>`:l.shape==='hex'?html`<path d="M-5,-9 L5,-9 L10,0 L5,9 L-5,9 L-10,0 Z" fill=${l.color}/>`:l.shape==='flag'?html`<path d="M-6,10 V-10 L9,-5 L-6,0" fill=${l.color}/>`:html`<circle r="8" fill=${l.color}/>`}</g></svg>${l.label}</li>`)}</ul>`;
 
 /* ============ Update 5: 12-hour clock, file preview, PDF export, scroll buttons ============ */
 /* Times are stored as HH:MM (24 h) so records stay sortable. Everything shown to people is 12 hour. */

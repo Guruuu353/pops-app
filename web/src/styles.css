@@ -628,3 +628,22 @@ body.has-sos .scrollbtns{bottom:170px}
 .mapset.tight{grid-template-columns:1fr}
 .gm-toolbtn{top:58px}.gm-tools{top:106px;max-height:calc(100% - 190px)}
 div:has(>.gm-toolbtn)>.gm-leg{top:106px}
+/* update 6: slimmer routes, distance labels, incident pins, route controls */
+.gm-track{stroke-width:2.6;filter:drop-shadow(0 0 1.5px rgba(0,0,0,.8))}.gm-track.act{stroke-width:3.4}.gm-track.sel{stroke-width:4.2}.gm-track:hover{stroke-width:3.6}
+.gm-mine{stroke-width:3}
+.gm-arrows path{transform-box:fill-box}.gm-arrows path{stroke-width:1}
+.gm-dist rect{fill:rgba(7,20,24,.88);stroke:rgba(255,255,255,.7);stroke-width:1}.gm-dist text{fill:#fff;font:700 10.5px var(--font-b)}
+.gm-ends circle.gm-a,.gm-ends circle.gm-b{r:9}.gm-ends text{font-size:10px}
+.gm-stop circle{r:8}
+.mk-hl{fill:rgba(255,210,63,.25);stroke:#FFD23F;stroke-width:2.5;animation:mkhl 1.4s ease-in-out infinite}
+@keyframes mkhl{0%,100%{opacity:.4}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.mk-hl{animation:none}}
+.routebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.routebar .seg{margin:0}.routebar select,.routebar input[type=date]{min-height:36px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}
+.routebar .rinfo{font-size:.85rem;color:var(--muted)}
+.mylocbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.gm-list li .btnrow{display:flex;gap:6px}
+.gm-livebtn{position:absolute;right:64px;top:10px;z-index:6;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;min-height:40px;padding:0 12px;font:600 13px var(--font-b);cursor:pointer}.gm-livebtn.on{background:var(--brand);color:var(--on-brand)}
+@media (max-width:560px){.gm-livebtn{right:60px;font-size:12px;padding:0 9px}}
+.routebar .segb{white-space:nowrap;padding:8px 12px;flex:none}.routebar .seg{flex:none;max-width:100%;overflow-x:auto}
+.gm-note{top:auto!important;bottom:44px!important;left:50%;transform:translateX(-50%);max-width:min(560px,calc(100% - 100px))}
