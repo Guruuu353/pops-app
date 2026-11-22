@@ -102,7 +102,7 @@ const uploadFile=async f=>{
  const r=await api('POST','/files',{name:f.name,mime:isImg?'image/jpeg':f.type,data});
  return {id:r.id,url:r.url,name:r.name,mime:r.mime};
 };
-const ScanList=({scans,onRemove})=>!scans||!scans.length?html`<p className="muted small">No scanned pages attached.</p>`:html`<div className="photos">${scans.map((x,i)=>html`<span key=${x.id||i} className="scanitem"><a className="ph" href=${x.url} target="_blank" rel="noopener" title=${x.name}>${x.mime==='application/pdf'?html`<span className="pdfbox">PDF<br/><small>${x.name}</small></span>`:html`<img src=${x.url} alt=${x.name||'Scanned page'}/>`}</a>${onRemove&&html`<button type="button" className="x" aria-label=${'Remove '+x.name} onClick=${()=>onRemove(i)}>×</button>`}</span>`)}</div>`;
+const ScanList=({scans,onRemove})=>!scans||!scans.length?html`<p className="muted small">No scanned pages attached.</p>`:html`<div className="photos">${scans.map((x,i)=>html`<span key=${x.id||i} className="scanitem"><${FileLink} className="ph" f=${x} title=${x.name}>${x.mime==='application/pdf'?html`<span className="pdfbox">PDF<br/><small>${x.name}</small></span>`:html`<img src=${x.url} alt=${x.name||'Scanned page'}/>`}</${FileLink}>${onRemove&&html`<button type="button" className="x" aria-label=${'Remove '+x.name} onClick=${()=>onRemove(i)}>×</button>`}</span>`)}</div>`;
 /* choose files, they are sent to the server and the list is returned through onAdd */
 const ScanPicker=({onAdd,label='Add scanned pages or photos',id='scan-in'})=>{
  const {toast}=useApp();const [busy,setBusy]=useState(false);

@@ -44,34 +44,41 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
  const evAdd=(k,n,at)=>{const id=at||cidRef.current;if(!id)return;const e={t:new Date().toISOString(),k,n:n||'',ll:last.current};setPatrols(x=>x.map(p=>p.id===id?{...p,events:[...(p.events||[]),e]}:p));};
  const setLang=l=>{setLangS(l);lsSet('lang',l);};
  useEffect(()=>lsSet('cid',cid),[cid]);
- useEffect(()=>{const on=()=>{setOnline(true);if(runRef.current){evAdd('online','Network is back. Saved records are sending.');flushTrack();}},off=()=>{setOnline(false);if(runRef.current)evAdd('offline','No network. Records are kept on the phone.');};window.addEventListener('online',on);window.addEventListener('offline',off);return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
+ useEffect(()=>{const on=()=>{setOnline(true);if(runRef.current){evAdd('online','Network is back. Saved records are sending.');flushRef.current();}},off=()=>{setOnline(false);if(runRef.current)evAdd('offline','No network. Records are kept on the phone.');};window.addEventListener('online',on);window.addEventListener('offline',off);return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off);};},[]);
+ const flushRef=useRef(()=>{});
  const upd=fn=>setPatrols(x=>x.map(p=>p.id===cid?fn(p):p));
  // when the app opens, pick up a patrol this person left open
  useEffect(()=>{if(cid&&!patrols.find(p=>p.id===cid))setCid(null);},[patrols.length]);
  // clock
  useEffect(()=>{if(!running)return;const i=setInterval(()=>{secRef.current+=1;setSec(secRef.current);},1000);return()=>clearInterval(i);},[running]);
  // GPS: only while a patrol is being recorded
- const lastTs=useRef(0),needBrk=useRef(false),rejN=useRef(0),candRef=useRef({v:null,n:0});
- /* returns true when the fix was used for the track */
- const addPoint=(ll,acc,ts)=>{
-  ts=ts||Date.now();if(acc&&acc>GPS.accMax)return false;
-  const l=last.current;const push=(brk)=>{const pt=brk&&trackRef.current.length?[ll[0],ll[1],1]:ll;last.current=ll;lastTs.current=ts;trackRef.current=[...trackRef.current,pt];setTrack(trackRef.current);rejN.current=0;needBrk.current=false;};
-  if(!l||needBrk.current){push(!!l||needBrk.current);return true;}
-  const d=haversine(l,ll);const dt=(ts-lastTs.current)/1000;
-  if(d<Math.max(GPS.minMove,Math.min(acc||0,25)))return true;
-  if(dt>GPS.gapSec){push(true);return true;}
-  if(dt>0&&d/dt>GPS.maxMps){rejN.current+=1;if(rejN.current<3)return false;push(true);return true;}
-  kmRef.current+=d/1000;setKm(kmRef.current);push(false);return true;};
+ const recRef=useRef(newRec(null)),candRef=useRef({v:null,n:0}),wakeRef=useRef(null);
+ const [live,setLive]=useState({spd:0,hdg:null,moving:false,stopped:0,wake:false});
+ /* returns true when the fix was used for the track. The recorder (track.js) keeps every turn, stop and gap. */
+ const addPoint=(ll,acc,ts,spd,hdg)=>{
+  const S=recRef.current;const r=recFix(S,ll,acc,ts||Date.now(),spd,hdg);if(!r.used)return false;
+  last.current=ll;trackRef.current=S.pts;kmRef.current=S.km;setTrack(S.pts.slice());setKm(S.km);
+  setLive(o=>({...o,spd:S.cur.spd,hdg:S.cur.hdg,moving:S.cur.moving,stopped:S.stop?Math.round((S.stop.t1-S.stop.t0)/60):0}));
+  r.events.forEach(e=>evAdd(e.k,e.n));return true;};
+ /* keep the screen awake while recording: a phone that sleeps stops reporting its position */
+ useEffect(()=>{
+  if(!running)return;let dead=false;
+  const get=async()=>{try{if(navigator.wakeLock&&document.visibilityState==='visible'){const w=await navigator.wakeLock.request('screen');if(dead){w.release();return;}wakeRef.current=w;setLive(o=>({...o,wake:true}));w.addEventListener('release',()=>{setLive(o=>({...o,wake:false}));});}}catch(e){setLive(o=>({...o,wake:false}));}};
+  const vis=()=>{if(document.visibilityState==='visible'){evAdd('screen_on','Screen on again. Recording continues.');get();}else evAdd('screen_off','Screen off or app in the background. A phone may stop reporting its position until the screen is on.');};
+  get();document.addEventListener('visibilitychange',vis);
+  return()=>{dead=true;document.removeEventListener('visibilitychange',vis);try{wakeRef.current&&wakeRef.current.release();}catch(e){}wakeRef.current=null;};
+ },[running]);
  useEffect(()=>{
   if(!running)return;
   if(!navigator.geolocation){setGpsErr(FT[lang].noGps);return;}
-  const id=navigator.geolocation.watchPosition(p=>{if(gpsBad.current){gpsBad.current=false;evAdd('gps_ok','GPS signal is back');}setGpsErr('');const ll=[p.coords.latitude,p.coords.longitude];setPos({lat:ll[0],lon:ll[1],acc:p.coords.accuracy});posRef.current={lat:ll[0],lon:ll[1],acc:p.coords.accuracy,ts:p.timestamp||Date.now()};const good=addPoint(ll,p.coords.accuracy,p.timestamp);if(p.coords.accuracy&&p.coords.accuracy>GPS.accMax){setGpsErr('Weak GPS signal (±'+Math.round(p.coords.accuracy)+' m). Not counted until it improves.');return;}if(!good)return;const w=inOut(ll);setWhere({...w,at:Date.now()});const pv=inRef.current;if(pv===null){evAdd('where','Start position: '+(w.in?'inside the LMMA. ':'outside the LMMA. ')+w.zone);inRef.current=w.in;candRef.current={v:null,n:0};}else if(pv!==w.in){const c=candRef.current;c.n=c.v===w.in?c.n+1:1;c.v=w.in;if(c.n>=2){evAdd(w.in?'enter':'exit',w.in?'Entered the Iweni LMMA':'Left the Iweni LMMA');inRef.current=w.in;c.n=0;c.v=null;}}else candRef.current={v:null,n:0};},e=>{if(!gpsBad.current){gpsBad.current=true;evAdd('gps_lost',e.code===1?'Location permission is off':'GPS signal lost');}setGpsErr(e.code===1?FT[lang].noGps:(e.message||'GPS not available'));},{enableHighAccuracy:true,maximumAge:2000,timeout:25000});
+  const id=navigator.geolocation.watchPosition(p=>{if(gpsBad.current){gpsBad.current=false;evAdd('gps_ok','GPS signal is back');}setGpsErr('');const ll=[p.coords.latitude,p.coords.longitude];setPos({lat:ll[0],lon:ll[1],acc:p.coords.accuracy,hdg:p.coords.heading});posRef.current={lat:ll[0],lon:ll[1],acc:p.coords.accuracy,ts:p.timestamp||Date.now()};const good=addPoint(ll,p.coords.accuracy,p.timestamp,p.coords.speed,p.coords.heading);if(p.coords.accuracy&&p.coords.accuracy>GPS.accMax){setGpsErr('Weak GPS signal (±'+Math.round(p.coords.accuracy)+' m). Not counted until it improves.');return;}if(!good)return;const w=inOut(ll);setWhere({...w,at:Date.now()});const pv=inRef.current;if(pv===null){evAdd('where','Start position: '+(w.in?'inside the LMMA. ':'outside the LMMA. ')+w.zone);inRef.current=w.in;candRef.current={v:null,n:0};}else if(pv!==w.in){const c=candRef.current;c.n=c.v===w.in?c.n+1:1;c.v=w.in;if(c.n>=2){evAdd(w.in?'enter':'exit',w.in?'Entered the Iweni LMMA':'Left the Iweni LMMA');inRef.current=w.in;c.n=0;c.v=null;}}else candRef.current={v:null,n:0};},e=>{if(!gpsBad.current){gpsBad.current=true;evAdd('gps_lost',e.code===1?'Location permission is off':'GPS signal lost');}setGpsErr(e.code===1?FT[lang].noGps:(e.message||'GPS not available'));},{enableHighAccuracy:true,maximumAge:2000,timeout:25000});
   return()=>navigator.geolocation.clearWatch(id);
  },[running]);
  // keep the saved patrol up to date every 20 seconds while recording
- const flushTrack=()=>{if(!cid)return;const pp=posRef.current;const nowRec=pp?{lat:pp.lat,lon:pp.lon,in:inOut([pp.lat,pp.lon]).in,zone:inOut([pp.lat,pp.lon]).zone,at:new Date(pp.ts||Date.now()).toISOString(),acc:Math.round(pp.acc||0)}:null;upd(p=>({...p,track:thin(trackRef.current),km:Math.round(kmRef.current*100)/100,secs:secRef.current,seen:nowRec?nowRec.at:new Date().toISOString(),hb:new Date().toISOString(),...(nowRec?{now:nowRec}:{})}));if(pp&&navigator.onLine!==false)api('POST','/pos',{lat:pp.lat,lon:pp.lon,acc:pp.acc,doing:'On patrol '+cid}).catch(()=>{});};
- useEffect(()=>{if(!running)return;const i=setInterval(flushTrack,20000);return()=>clearInterval(i);},[running,cid]);
- const load=p=>{needBrk.current=true;trackRef.current=p.track||[];kmRef.current=p.km||0;secRef.current=p.secs||0;setTrack(trackRef.current);setKm(kmRef.current);setSec(secRef.current);last.current=trackRef.current[trackRef.current.length-1]||null;};
+ const flushTrack=()=>{if(!cid)return;const pp=posRef.current;const nowRec=pp?{lat:pp.lat,lon:pp.lon,in:inOut([pp.lat,pp.lon]).in,zone:inOut([pp.lat,pp.lon]).zone,at:new Date(pp.ts||Date.now()).toISOString(),acc:Math.round(pp.acc||0)}:null;const sm=recSummary(recRef.current);upd(p=>({...p,...sm,secs:secRef.current,seen:nowRec?nowRec.at:new Date().toISOString(),hb:new Date().toISOString(),...(nowRec?{now:nowRec}:{})}));if(pp&&navigator.onLine!==false)api('POST','/pos',{lat:pp.lat,lon:pp.lon,acc:pp.acc,doing:'On patrol '+cid}).catch(()=>{});};
+ flushRef.current=flushTrack;
+ useEffect(()=>{if(!running)return;const i=setInterval(()=>flushRef.current(),20000);return()=>clearInterval(i);},[running,cid]);
+ const load=p=>{recRef.current=newRec(p);trackRef.current=recRef.current.pts;kmRef.current=recRef.current.km;secRef.current=p.secs||0;setTrack(trackRef.current.slice());setKm(kmRef.current);setSec(secRef.current);const lp=trackRef.current[trackRef.current.length-1];last.current=lp?[lp[0],lp[1]]:null;};
  const resume=p=>{setCid(p.id);load(p);if(p.status==='Active')evAdd('resume','App reopened. Recording continues.',p.id);if(p.status==='Active'||p.status==='Paused'){setScr('patrol');setRunning(p.status==='Active');}else setScr('done');};
  const myOpen=()=>patrols.filter(p=>(p.leader===me||(p.rangers||[]).includes(me))&&['Active','Paused'].includes(p.status));
  const begin=(pr,planned)=>{
@@ -81,12 +88,12 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
   let id;
   if(planned){id=planned.id;setPatrols(x=>x.map(p=>p.id===id?{...p,...base,rangers:p.rangers&&p.rangers.length?p.rangers:[me],leader:base.leader||p.leader||me}:p));}
   else{id=newId('PT');const iso=localIso();setPatrols(x=>[{id,iso,date:dateLabel(),unplanned:true,leader:(lo?lo.name:me),rangers:[me,...(pr.crew||[])],cox:pr.cox||'',bmu:(account&&account.bmu)||'pate',...base},...x]);}
-  inRef.current=null;trackRef.current=[];kmRef.current=0;secRef.current=0;last.current=null;setTrack([]);setKm(0);setSec(0);setGpsErr('');setCid(id);setRunning(true);setScr('patrol');log('Started patrol','Patrols',id);
+  inRef.current=null;recRef.current=newRec(null);trackRef.current=[];kmRef.current=0;secRef.current=0;last.current=null;setTrack([]);setKm(0);setSec(0);setGpsErr('');setCid(id);setRunning(true);setScr('patrol');log('Started patrol','Patrols',id);
  };
  const getFix=()=>new Promise(ok=>{if(posRef.current)return ok(posRef.current);if(!navigator.geolocation)return ok(null);navigator.geolocation.getCurrentPosition(p=>ok({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy}),()=>ok(null),{enableHighAccuracy:true,timeout:8000,maximumAge:30000});});
  const sendSos=async(kind,note)=>{const fix=await getFix();const rec={id:newId('SOS'),kind,note:note||'',by:me,byId:account?account.id:'',phone:(account&&account.phone)||'',lat:fix?fix.lat:null,lon:fix?fix.lon:null,acc:fix?Math.round(fix.acc||0):null,at:new Date().toISOString(),patrol:cidRef.current||'',zone:fix?inOut([fix.lat,fix.lon]).zone:'Position unknown',status:'Active'};setSos(l=>[rec,...l]);setSosId(rec.id);lsSet('sosid',rec.id);log('Sent SOS','Safety',rec.id);try{navigator.vibrate&&navigator.vibrate([300,100,300]);}catch(e){}return rec;};
  const cancelSos=()=>{setSos(l=>l.map(x=>x.id===sosId?{...x,status:'Cancelled',closedAt:new Date().toISOString()}:x));setSosId(null);lsSet('sosid',null);};
- const togglePause=()=>{flushTrack();const n=!running;if(n){needBrk.current=true;rejN.current=0;}evAdd(n?'resume':'pause',n?'Patrol resumed':'Patrol paused');setRunning(n);upd(p=>({...p,status:n?'Active':'Paused'}));};
+ const togglePause=()=>{flushTrack();const n=!running;if(n)recBreak(recRef.current);evAdd(n?'resume':'pause',n?'Patrol resumed':'Patrol paused');setRunning(n);upd(p=>({...p,status:n?'Active':'Paused'}));};
  const addObs=(o,i)=>{upd(p=>{const l=[...(p.obsList||[])];const rec={...o,id:o.id||newId('OB').toLowerCase(),ll:o.ll||last.current};if(i>=0)l[i]=rec;else l.push(rec);return {...p,obsList:l,obs:l.length};});if(i<0)evAdd('obs',o.type);setScr('patrol');toast('Observation saved');};
  const delObs=i=>upd(p=>{const l=(p.obsList||[]).filter((_,k)=>k!==i);return {...p,obsList:l,obs:l.length};});
  const addInc=(o,i)=>{upd(p=>{const l=[...(p.incList||[])];const rec={...o,id:o.id||newId('INC'),ll:o.ll||last.current};if(i>=0)l[i]=rec;else l.push(rec);return {...p,incList:l,inc:l.length};});if(i<0)evAdd('incident',o.cat);setScr('patrol');toast('Incident saved');};
@@ -108,7 +115,7 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
  const complete=()=>{flushTrack();evAdd('stop','Patrol stopped');setRunning(false);upd(p=>({...p,status:'Paused'}));setScr('done');};
  const finish=(post,submit)=>{
   const p0=cur;const end=hhmm();evAdd(submit?'submit':'draft',submit?'Submitted for review':'Saved as draft');
-  upd(p=>({...p,end,chal:post.chal,attach:post.attach,fuel:post.fuel,prep:post.prep,mcsx:p.mcsx||{},track:thin(trackRef.current),km:Math.round(kmRef.current*100)/100,secs:secRef.current,status:submit?'Completed':'Draft',review:submit?'Pending review':'—'}));
+  upd(p=>({...p,end,chal:post.chal,attach:post.attach,fuel:post.fuel,prep:post.prep,mcsx:p.mcsx||{},...recSummary(recRef.current),secs:secRef.current,status:submit?'Completed':'Draft',review:submit?'Pending review':'—'}));
   if(submit){
    const ids=new Set();
    const mk=(p0.incList||[]).map(c=>{const ll=c.ll||trackRef.current[trackRef.current.length-1]||null;const xy=ll?proj(ll[0],ll[1]):[null,null];return {id:c.id,date:(c.date||p0.date||dateLabel()),iso:c.iso||p0.iso||localIso(),time:c.time||'',cat:c.cat,ranger:me,patrol:p0.id,desc:c.desc||'No description',personsList:c.persons||[],personsUnknown:!!c.unknown,persons:c.unknown?'Not identified':(c.persons||[]).map(x=>x.name).filter(Boolean).join(', ')||'None recorded',code:c.code||'',action:'Reported from the field app',ref:'None',stage:0,x:xy[0],y:xy[1],lat:ll?ll[0]:null,lon:ll?ll[1]:null,loc:'sensitive',photos:c.photos||[]};});
@@ -118,7 +125,7 @@ const useFieldStore=({patrols,setPatrols,setIncidents,log,toast,account,settings
   setCid(null);setRunning(false);setScr('home');setTab('home');
  };
  const locate=()=>{if(!navigator.geolocation){toast('This device has no GPS');return;}navigator.geolocation.getCurrentPosition(p=>{setPos({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy});posRef.current={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};setWhere({...inOut([p.coords.latitude,p.coords.longitude]),at:Date.now()});},e=>toast('Location unavailable: '+(e.message||'permission denied')),{enableHighAccuracy:true,timeout:12000});};
- return {tab,setTab,scr,setScr,cur,cid,running,sec,km,track,pos,gpsErr,online,lang,setLang,begin,resume,park,myOpen,alertMsg,clearAlert:()=>setAlertMsg(''),togglePause,addObs,delObs,addInc,delInc,addEnc,delEnc,addPhoto,delPhoto,complete,finish,locate,where,sos,sosId,sendSos,cancelSos,posRef};
+ return {tab,setTab,scr,setScr,cur,cid,running,sec,km,track,pos,live,gpsErr,online,lang,setLang,begin,resume,park,myOpen,alertMsg,clearAlert:()=>setAlertMsg(''),togglePause,addObs,delObs,addInc,delInc,addEnc,delEnc,addPhoto,delPhoto,complete,finish,locate,where,sos,sosId,sendSos,cancelSos,posRef};
 };
 
 const PhotoPick=({fs,t})=>html`<label className="photobtn"><input type="file" accept="image/*" capture="environment" className="sr" onChange=${e=>{const f=e.target.files&&e.target.files[0];fs.addPhoto(f);e.target.value='';}}/><${Icon} n="camera" s=${22}/>${t('addPhoto')}</label>`;
@@ -142,17 +149,22 @@ const SosSheet=({fs,t,onClose,settings})=>{
  const send=async()=>{setBusy(true);await fs.sendSos(kind,note);setBusy(false);};
  const fix=fs.posRef.current;
  const smsTo=(settings&&settings.sosPhone)||'';
- const body=encodeURIComponent('SOS '+kind+' from '+(fs.sos[0]&&fs.sos[0].by||'ranger')+(fix?'. Location: '+fix.lat.toFixed(5)+','+fix.lon.toFixed(5)+' https://maps.google.com/?q='+fix.lat.toFixed(5)+','+fix.lon.toFixed(5):'. Location unknown')+(note?'. '+note:''));
+ const contacts=((settings&&settings.contacts)||[]).filter(c=>!c.types||!c.types.length||c.types.includes(mine&&mine.status!=='Cancelled'?mine.kind:kind));
+ const ContactList=()=>contacts.length?html`<div className="soscon"><h3 className="fa-h">Who to call</h3>${contacts.map(c=>html`<div key=${c.id} className="sc"><div><b>${c.name||c.org}</b>${c.name&&c.org&&html`<span>${c.org}</span>`}${c.note&&html`<small>${c.note}</small>`}</div><div className="scn"><a className="big callb" href=${'tel:'+c.phone.replace(/\s+/g,'')}>Call ${c.phone}</a>${c.phone2&&html`<a className="big callb alt" href=${'tel:'+c.phone2.replace(/\s+/g,'')}>Call ${c.phone2}</a>`}<a className="big callb alt" href=${'sms:'+c.phone.replace(/\s+/g,'')+'?&body='+body}>Text</a></div></div>`)}</div>`:null;
+
+ const body=encodeURIComponent('SOS '+(mine&&mine.status!=='Cancelled'?mine.kind:kind)+' from '+(fs.sos[0]&&fs.sos[0].by||'ranger')+(fix?'. Location: '+fix.lat.toFixed(5)+','+fix.lon.toFixed(5)+' https://maps.google.com/?q='+fix.lat.toFixed(5)+','+fix.lon.toFixed(5):'. Location unknown')+(note?'. '+note:''));
  return html`<div className="sosov" role="dialog" aria-modal="true" aria-label=${t('sosT')}><div className="sosbox">
   <h2>${t('sosT')}</h2>
-  ${mine&&mine.status!=='Cancelled'?html`<div className=${'sosstat '+mine.status}><b>${mine.status==='Active'?t('sosSent'):mine.status==='Acknowledged'?t('sosAck'):'Resolved'}</b><p className="small">${mine.kind} · ${mine.lat!=null?fmtLL(mine.lat,mine.lon):'Position unknown'} · ${new Date(mine.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</p>${mine.status==='Active'&&html`<p className="small">${t('sosWait')}</p>`}${mine.ackBy&&html`<p className="small">Seen by ${mine.ackBy}</p>`}</div>
+  ${mine&&mine.status!=='Cancelled'?html`<div className=${'sosstat '+mine.status}><b>${mine.status==='Active'?t('sosSent'):mine.status==='Acknowledged'?t('sosAck'):'Resolved'}</b><p className="small">${mine.kind} · ${mine.lat!=null?fmtLL(mine.lat,mine.lon):'Position unknown'} · ${new Date(mine.at).toLocaleTimeString('en-GB',{hour:'numeric',minute:'2-digit',hour12:true})}</p>${mine.status==='Active'&&html`<p className="small">${t('sosWait')}</p>`}${mine.ackBy&&html`<p className="small">Seen by ${mine.ackBy}</p>`}</div>
    <div className="bgrid">${smsTo&&html`<a className="big" href=${'sms:'+smsTo+'?&body='+body}>${t('sosSms')}</a>`}<button type="button" className="big" onClick=${()=>{fs.cancelSos();}}>${t('sosCancel')}</button></div>
+   <${ContactList}/>
    <button type="button" className="big" onClick=${onClose}>${t('back')}</button>`
   :html`<p className="muted small">${t('sosQ')}</p><${WhereNow} fs=${fs} t=${t}/>
    <label htmlFor="sos-k">${t('sosWhat')}</label><${Sel} id="sos-k" value=${kind} onChange=${setKind} opts=${SOS_KINDS}/>
    <label htmlFor="sos-n">${t('sosNote')}</label><input id="sos-n" value=${note} onChange=${e=>setNote(e.target.value)}/>
    <button type="button" className="big sosgo" disabled=${busy} onClick=${send}>${t('sosSend')}</button>
    ${smsTo&&html`<a className="big" href=${'sms:'+smsTo+'?&body='+body}>${t('sosSms')}</a>`}
+   <${ContactList}/>
    <button type="button" className="big" onClick=${onClose}>${t('cancel')}</button>`}
  </div></div>`;
 };
@@ -206,6 +218,7 @@ const FieldApp=({embedded})=>{
   ${fs.where&&html`<div className=${'where slim '+(fs.where.in?'in':'out')}><b>${fs.where.in?t('inside'):t('outside')}</b><span>${fs.where.zone}</span></div>`}
   <div className=${'gps '+(fs.running?'':'off')}><i/>${fs.running?t('gpsOn'):t('gpsPaused')}${fs.gpsErr&&html` <b>${fs.gpsErr}</b>`}</div>
   <div className="timer">${tm}</div>
+  <div className="livebar"><span><b>${((fs.live.spd||0)*3.6).toFixed(1)}</b>km/h</span><span><b>${fs.live.moving?(fs.live.hdg!=null?trkDir(fs.live.hdg)+' '+Math.round(fs.live.hdg)+'°':'Moving'):(fs.live.stopped?'Stopped '+fs.live.stopped+' min':'Standing')}</b>${fs.live.moving?'Heading':'Status'}</span><span className=${fs.live.wake?'ok':'warn'}><b>${fs.live.wake?'On':'Off'}</b>Screen kept awake</span></div>
   <div className="tstat"><span><b>${fs.km.toFixed(2)}</b>${t('km')}</span><span><b>${enc.length}</b>${t('checks')}</span><span><b>${enc.filter(e=>e.code).length}</b>${t('infrN')}</span><span><b>${(cur.seiz||[]).length}</b>${t('seizN')}</span></div>
   <button type="button" className="big go" onClick=${()=>{setCk(blankCk());setCi(-1);fs.setScr('chk');}}><${Icon} n="staff" s=${24}/>${t('chk')}</button>
   <div className="bgrid"><button type="button" className="big" onClick=${fs.togglePause}><${Icon} n=${fs.running?'pause':'play'} s=${24}/>${fs.running?t('pause'):t('resume')}</button><button type="button" className="big" onClick=${()=>{setOf_({id:'',type:'Marine wildlife',notes:'',time:hhmm()});setOi(-1);fs.setScr('obs');}}><${Icon} n="eye" s=${24}/>${t('obs')} (${obsL.length})</button><button type="button" className="big warn" onClick=${()=>{setInf(blankInc());setIi(-1);fs.setScr('inc');}}><${Icon} n="incident" s=${24}/>${t('inc')} (${incL.length})</button><${PhotoPick} fs=${fs} t=${t}/></div>
@@ -218,7 +231,7 @@ const FieldApp=({embedded})=>{
   const toggleSeized=v=>setCk(o=>({...o,seized:v,items:v&&!o.items[0].name?[{name:(o.gear!=='None'?o.gear+' '+o.gearId:'').trim(),unit:'Piece',qty:o.qty||'1',value:''},...o.items.slice(1)]:o.items}));
   const setOth=(i,k,v)=>setCk(o=>({...o,others:o.others.map((x,j)=>j===i?{...x,[k]:v}:x)}));
   body=html`<div className="fa-form"><h2>${t('chk')}</h2><p className="muted small">Form 1A · ${cur.id} · No. ${ci>=0?ci+1:enc.length+1}</p>
-  <div className="two"><div><label htmlFor="ck-time">${t('time')}</label><input id="ck-time" type="time" value=${ck.time} onChange=${e=>u('time',e.target.value)}/></div><div><label htmlFor="ck-or">${t('origin')}</label><${Sel} id="ck-or" value=${ck.origin} onChange=${v=>u('origin',v)} opts=${[...BMUS.map(b=>b.name.replace(' BMU','')),'Other']}/></div></div>
+  <div className="two"><div><label htmlFor="ck-time">${t('time')}</label><${Tm12} id="ck-time" value=${ck.time} onChange=${v=>u('time',v)}/></div><div><label htmlFor="ck-or">${t('origin')}</label><${Sel} id="ck-or" value=${ck.origin} onChange=${v=>u('origin',v)} opts=${[...BMUS.map(b=>b.name.replace(' BMU','')),'Other']}/></div></div>
   <label htmlFor="ck-n">${t('fname')}</label><input id="ck-n" autoComplete="off" value=${ck.name} onChange=${e=>u('name',e.target.value)}/>
   <div className="two"><div><label htmlFor="ck-id">${t('idno')}</label><input id="ck-id" inputMode="numeric" autoComplete="off" value=${ck.id} onChange=${e=>u('id',e.target.value)}/></div><div><label htmlFor="ck-ph">${t('phone')}</label><input id="ck-ph" type="tel" inputMode="tel" autoComplete="off" value=${ck.phone} onChange=${e=>u('phone',e.target.value)}/></div></div>
   <h3 className="fa-h">${t('others')}</h3>
@@ -233,9 +246,9 @@ const FieldApp=({embedded})=>{
   ${ck.seized&&html`<div className="seizebox"><p className="small muted">The Seizure Form is filled in for you from this check: officer, station, place and time.</p>${ck.items.map((it,i)=>html`<div key=${i} className="seize-r"><input aria-label=${t('itemName')+' '+(i+1)} placeholder=${t('itemName')} value=${it.name} onChange=${e=>setIt(i,'name',e.target.value)}/><${Sel} id=${'si-u'+i} value=${it.unit} onChange=${v=>setIt(i,'unit',v)} opts=${UNITS}/><input aria-label=${t('qty')} placeholder=${t('qty')} type="number" inputMode="numeric" value=${it.qty} onChange=${e=>setIt(i,'qty',e.target.value)}/><input aria-label=${t('value')} placeholder=${t('value')} type="number" inputMode="numeric" value=${it.value} onChange=${e=>setIt(i,'value',e.target.value)}/></div>`)}${ck.items.length<7&&html`<button type="button" className="btn" onClick=${()=>setCk(o=>({...o,items:[...o.items,blankItem()]}))}>${t('addItem')}</button>`}</div>`}
   <${PhotoPick} fs=${fs} t=${t}/><${Thumbs} fs=${fs}/>
   <div className="bgrid"><button type="button" className="big" onClick=${()=>fs.setScr('patrol')}>${t('cancel')}</button><button type="button" className="big go" disabled=${!ck.name.trim()} onClick=${()=>{const it=ck.seized?ck.items.filter(i=>i.name.trim()).map(i=>({...i,qty:+i.qty||1,value:+i.value||0})):[];fs.addEnc({...ck},it,ci);setCk(blankCk());setCi(-1);}}>${t('save')}</button></div></div>`;}
- else if(fs.scr==='obs'&&cur){nav=false;body=html`<div className="fa-form"><h2>${t('newObs')}</h2><label htmlFor="fo-tm">${t('time')}</label><input id="fo-tm" type="time" value=${of_.time||''} onChange=${e=>setOf_(o=>({...o,time:e.target.value}))}/><label htmlFor="fo-t">${t('type')}</label><${Sel} id="fo-t" value=${of_.type} onChange=${v=>setOf_(o=>({...o,type:v}))} opts=${['Marine wildlife','Coral condition','Habitat','Boat activity','Other']}/><label htmlFor="fo-n">${t('notes')}</label><textarea id="fo-n" rows="4" value=${of_.notes} onChange=${e=>setOf_(o=>({...o,notes:e.target.value}))}/><${PhotoPick} fs=${fs} t=${t}/><${Thumbs} fs=${fs}/><p className="small muted">GPS: ${fs.pos?fs.pos.lat.toFixed(5)+', '+fs.pos.lon.toFixed(5):'waiting for position'}</p><div className="bgrid"><button type="button" className="big" onClick=${()=>fs.setScr('patrol')}>${t('cancel')}</button><button type="button" className="big go" onClick=${()=>{fs.addObs(of_,oi);setOf_({id:'',type:'Marine wildlife',notes:'',time:hhmm()});setOi(-1);}}>${t('save')}</button></div></div>`;}
+ else if(fs.scr==='obs'&&cur){nav=false;body=html`<div className="fa-form"><h2>${t('newObs')}</h2><label htmlFor="fo-tm">${t('time')}</label><${Tm12} id="fo-tm" value=${of_.time||''} onChange=${v=>setOf_(o=>({...o,time:v}))}/><label htmlFor="fo-t">${t('type')}</label><${Sel} id="fo-t" value=${of_.type} onChange=${v=>setOf_(o=>({...o,type:v}))} opts=${['Marine wildlife','Coral condition','Habitat','Boat activity','Other']}/><label htmlFor="fo-n">${t('notes')}</label><textarea id="fo-n" rows="4" value=${of_.notes} onChange=${e=>setOf_(o=>({...o,notes:e.target.value}))}/><${PhotoPick} fs=${fs} t=${t}/><${Thumbs} fs=${fs}/><p className="small muted">GPS: ${fs.pos?fs.pos.lat.toFixed(5)+', '+fs.pos.lon.toFixed(5):'waiting for position'}</p><div className="bgrid"><button type="button" className="big" onClick=${()=>fs.setScr('patrol')}>${t('cancel')}</button><button type="button" className="big go" onClick=${()=>{fs.addObs(of_,oi);setOf_({id:'',type:'Marine wildlife',notes:'',time:hhmm()});setOi(-1);}}>${t('save')}</button></div></div>`;}
  else if(fs.scr==='inc'&&cur){nav=false;const setPe=(i,k,v)=>setInf(o=>({...o,persons:o.persons.map((x,j)=>j===i?{...x,[k]:v}:x)}));body=html`<div className="fa-form"><h2>${t('newInc')}</h2>
-  <div className="two"><div><label htmlFor="fi-dt">${t('date')}</label><input id="fi-dt" type="date" value=${inf.date||''} onChange=${e=>setInf(o=>({...o,date:e.target.value}))}/></div><div><label htmlFor="fi-tm">${t('time')}</label><input id="fi-tm" type="time" value=${inf.time||''} onChange=${e=>setInf(o=>({...o,time:e.target.value}))}/></div></div>
+  <div className="two"><div><label htmlFor="fi-dt">${t('date')}</label><input id="fi-dt" type="date" value=${inf.date||''} onChange=${e=>setInf(o=>({...o,date:e.target.value}))}/></div><div><label htmlFor="fi-tm">${t('time')}</label><${Tm12} id="fi-tm" value=${inf.time||''} onChange=${v=>setInf(o=>({...o,time:v}))}/></div></div>
   <label htmlFor="fi-c">${t('category')}</label><${Sel} id="fi-c" value=${inf.cat} onChange=${v=>setInf(o=>({...o,cat:v}))} opts=${INC_CATS}/>
   <label htmlFor="fi-k">${t('infr')}</label><${Sel} id="fi-k" value=${inf.code||''} onChange=${v=>setInf(o=>({...o,code:v}))} opts=${infOpts()}/>
   <label htmlFor="fi-d">${t('desc')}</label><textarea id="fi-d" rows="4" value=${inf.desc} onChange=${e=>setInf(o=>({...o,desc:e.target.value}))}/>
@@ -249,7 +262,7 @@ const FieldApp=({embedded})=>{
   const ck2=k=>setPo(o=>({...o,chal:{...o.chal,[k]:!o.chal[k]}}));
   const doc=pvT==='capture'?html`<${FormCapture} p=${draft} pii=${true}/>`:pvT==='report'?html`<${FormReport} p=${draft}/>`:pvT==='mcs'?html`<${FormMCS} p=${draft}/>`:((draft.seiz||[]).length?html`<${FormSeizure} s=${draft.seiz[0]} p=${draft} pii=${true}/>`:html`<p className="muted small">No items were seized, so no Seizure Form is needed.</p>`);
   const post={chal:po.chal,attach,fuel:po.fuel,prep:draft.prep};
-  body=html`<div className="fa-form"><h2>${t('summary')}</h2><div className="sumgrid"><span>${t('duration')}<b>${tm}</b></span><span>${t('distance')}<b>${fs.km.toFixed(2)} km</b></span><span>${t('checks')}<b>${enc.length}</b></span><span>${t('infrN')}<b>${enc.filter(e=>e.code).length}</b></span><span>${t('seizN')}<b>${(cur.seiz||[]).length}</b></span><span>${t('obs')} / ${t('inc')}<b>${obsL.length} / ${incL.length}</b></span></div>
+  body=html`<div className="fa-form"><h2>${t('summary')}</h2><div className="sumgrid"><span>${t('duration')}<b>${tm}</b></span><span>${t('distance')}<b>${fs.km.toFixed(2)} km</b></span><span>Moving<b>${secTxt(fs.cur.moveSec)}</b></span><span>Stopped<b>${secTxt(fs.cur.stopSec)}</b></span><span>Top speed<b>${fs.cur.maxKmh||0} km/h</b></span><span>${t('checks')}<b>${enc.length}</b></span><span>${t('infrN')}<b>${enc.filter(e=>e.code).length}</b></span><span>${t('seizN')}<b>${(cur.seiz||[]).length}</b></span><span>${t('obs')} / ${t('inc')}<b>${obsL.length} / ${incL.length}</b></span></div>
   <h3 className="fa-h">${t('challenges')}</h3><div className="chks">${Object.keys(CHAL).map(k=>html`<label key=${k} className="chk"><input type="checkbox" checked=${!!po.chal[k]} onChange=${()=>ck2(k)}/><span>${CHAL[k][fs.lang==='sw'?1:0]}</span></label>`)}</div>
   ${po.chal.other&&html`<input aria-label="Other challenge" placeholder=${CHAL.other[0]} value=${po.chal.otherText||''} onChange=${e=>setPo(o=>({...o,chal:{...o.chal,otherText:e.target.value}}))}/>`}
   <label htmlFor="po-f">${t('fuel')}</label><input id="po-f" type="number" inputMode="decimal" min="0" value=${po.fuel} onChange=${e=>setPo(o=>({...o,fuel:e.target.value}))}/>

@@ -31,7 +31,7 @@ const ATTACH=[['capture','Patrol data capture form'],['costing','Patrol costing 
 const UNITS=['Piece','Kg','Metre','Set','Litre'];
 
 const pad4=n=>String(n).padStart(4,'0');
-const ampm=t=>{if(!t||!/^\d+:\d+/.test(t))return '';const a=t.split(':').map(Number);return ((a[0]%12)||12)+':'+pad(a[1])+(a[0]<12?' am':' pm');};
+const ampm=t=>{if(!t||!/^\d+:\d+/.test(t))return '';const a=t.split(':').map(Number);return ((a[0]%12)||12)+':'+pad(a[1])+(a[0]<12?' AM':' PM');};
 const mask=v=>v?'•••• '+String(v).replace(/\s/g,'').slice(-3):'';
 const piiOk=(role,settings)=>['admin','ranger','fisheries'].includes(role)||(role==='bmu'&&!!(settings&&settings.piiBmu));
 const sumParts=p=>Object.values(p.parts||{}).reduce((a,b)=>a+(+b||0),0);
