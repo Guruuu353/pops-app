@@ -9,7 +9,7 @@ const ConfirmDel=({open,onClose,what,onYes})=>html`<${Modal} open=${open} onClos
 
 const PatrolEdit=({p,onClose})=>{
  const {setPatrols,log,toast}=useApp();
- const [f,setF]=useState(()=>({iso:p.iso||'',start:p.start||'',end:p.end==='—'?'':p.end,leader:p.leader,rangers:(p.rangers||[]).join(', '),boat:p.boat,cox:p.cox,area:p.area,inLmma:!!p.inLmma,status:p.status,review:p.review,objective:p.objective==='—'?'':p.objective,km:p.km||'',observations:p.observations||'',challenges:p.challenges||'',action:p.action==='—'?'':p.action,bmu:p.bmu||'pate',leaderPhone:p.leaderPhone||'',fuel:p.fuel||'',bmuOther:(p.bmuOther||[]).join(', '),jointWith:(p.jointWith||[]).join(', '),partnersOther:(p.partnersOther||[]).join(', '),prepName:(p.prep&&p.prep.name)||'',prepDesig:(p.prep&&p.prep.desig)||'',chal:{...(p.chal||{})},chalText:(p.chal&&p.chal.otherText)||'',parts:{...(p.parts||{})}}));
+ const [f,setF]=useState(()=>({iso:p.iso||'',start:p.start||'',end:p.end==='—'?'':p.end,leader:p.leader,rangers:(p.rangers||[]).join(', '),boat:p.boat,cox:p.cox,area:p.area,inLmma:!!p.inLmma,status:p.status,review:p.review,objective:p.objective==='—'?'':p.objective,km:p.km||'',observations:p.observations||'',challenges:p.challenges||'',action:p.action==='—'?'':p.action,bmu:p.bmu||'pate',mode:p.mode||'single',leaderPhone:p.leaderPhone||'',fuel:p.fuel||'',bmuOther:(p.bmuOther||[]).join(', '),jointWith:(p.jointWith||[]).join(', '),partnersOther:(p.partnersOther||[]).join(', '),prepName:(p.prep&&p.prep.name)||'',prepDesig:(p.prep&&p.prep.desig)||'',chal:{...(p.chal||{})},chalText:(p.chal&&p.chal.otherText)||'',parts:{...(p.parts||{})}}));
  /* Form 1A rows: for an imported patrol this starts with the entry-log rows matched to it, so they can be corrected and kept */
  const [enc,setEnc]=useState(()=>(fillForm(p).enc||[]).map(e=>({...e})));
  const eu=(i,k,v)=>setEnc(a=>a.map((e,j)=>j===i?{...e,[k]:v}:e));
@@ -18,7 +18,7 @@ const PatrolEdit=({p,onClose})=>{
  const save=()=>{
   if(!f.iso){toast('Enter the date');return;}
   const rg=cleanNames(f.rangers);const leader=f.leader.trim()||rg[0]||'';const all=rg.includes(leader)||!leader?rg:[leader,...rg];
-  setPatrols(x=>x.map(q=>q.id===p.id?{...q,iso:f.iso,date:isoLabel(f.iso),start:f.start,end:f.end||'—',leader,rangers:all,boat:f.boat,cox:f.cox,area:f.area,areas:[f.area,...(q.areas||[]).slice(1)].filter(Boolean),inLmma:f.inLmma,status:f.status,review:f.review||'—',objective:f.objective||'—',km:+f.km||0,observations:f.observations,challenges:f.challenges,action:f.action||'—',bmu:f.bmu,leaderPhone:f.leaderPhone,fuel:f.fuel===''?q.fuel:+f.fuel,bmuOther:cleanNames(f.bmuOther),partnersOther:cleanNames(f.partnersOther),prep:{...(q.prep||{}),name:f.prepName,desig:f.prepDesig},chal:{...f.chal,otherText:f.chalText},parts:Object.fromEntries(Object.entries(f.parts).map(([k,v])=>[k,+v||0])),enc:enc.map((e,i)=>({...e,n:i+1,seized:!!e.seized||/confiscat/i.test(e.action||'')})),edited:new Date().toISOString()}:q));
+  setPatrols(x=>x.map(q=>q.id===p.id?{...q,iso:f.iso,date:isoLabel(f.iso),start:f.start,end:f.end||'—',leader,rangers:all,boat:f.boat,cox:f.cox,area:f.area,areas:[f.area,...(q.areas||[]).slice(1)].filter(Boolean),inLmma:f.inLmma,status:f.status,review:f.review||'—',objective:f.objective||'—',km:+f.km||0,observations:f.observations,challenges:f.challenges,action:f.action||'—',bmu:f.bmu,mode:f.mode,leaderPhone:f.leaderPhone,fuel:f.fuel===''?q.fuel:+f.fuel,bmuOther:cleanNames(f.bmuOther),partnersOther:cleanNames(f.partnersOther),prep:{...(q.prep||{}),name:f.prepName,desig:f.prepDesig},chal:{...f.chal,otherText:f.chalText},parts:Object.fromEntries(Object.entries(f.parts).map(([k,v])=>[k,+v||0])),enc:enc.map((e,i)=>({...e,n:i+1,seized:!!e.seized||/confiscat/i.test(e.action||'')})),edited:new Date().toISOString()}:q));
   log('Edited patrol','Patrols',p.id);toast('Patrol '+p.id+' saved');onClose();
  };
  return html`<div className="form">
@@ -39,6 +39,7 @@ const PatrolEdit=({p,onClose})=>{
   <${Field} label="Observations" id="pe-ob" wide=${true}><${TA} id="pe-ob" value=${f.observations} onChange=${v=>u('observations',v)}/></${Field}>
   <${Field} label="Challenges" id="pe-ch" wide=${true}><${TA} id="pe-ch" rows=${2} value=${f.challenges} onChange=${v=>u('challenges',v)}/></${Field}>
   <${Field} label="Action taken" id="pe-ac" wide=${true}><${TA} id="pe-ac" rows=${2} value=${f.action} onChange=${v=>u('action',v)}/></${Field}>
+  <${Field} label="Patrol type" id="pe-mode"><${Sel} id="pe-mode" value=${f.mode} onChange=${v=>u('mode',v)} opts=${[['single','Single patrol'],['joint','Joint patrol']]}/></${Field}>
   <${Field} label="Leader phone" id="pe-lp"><${Inp} id="pe-lp" type="tel" value=${f.leaderPhone} onChange=${v=>u('leaderPhone',v)}/></${Field}>
   <${Field} label="Fuel used (litres)" id="pe-fu"><${Inp} id="pe-fu" type="number" value=${f.fuel} onChange=${v=>u('fuel',v)}/></${Field}>
   <${Field} label="Other BMUs (commas)" id="pe-bo"><${Inp} id="pe-bo" value=${f.bmuOther} onChange=${v=>u('bmuOther',v)}/></${Field}>
@@ -102,7 +103,7 @@ const uploadFile=async f=>{
  const r=await api('POST','/files',{name:f.name,mime:isImg?'image/jpeg':f.type,data});
  return {id:r.id,url:r.url,name:r.name,mime:r.mime};
 };
-const ScanList=({scans,onRemove})=>!scans||!scans.length?html`<p className="muted small">No scanned pages attached.</p>`:html`<div className="photos">${scans.map((x,i)=>html`<span key=${x.id||i} className="scanitem"><${FileLink} className="ph" f=${x} title=${x.name}>${x.mime==='application/pdf'?html`<span className="pdfbox">PDF<br/><small>${x.name}</small></span>`:html`<img src=${x.url} alt=${x.name||'Scanned page'}/>`}</${FileLink}>${onRemove&&html`<button type="button" className="x" aria-label=${'Remove '+x.name} onClick=${()=>onRemove(i)}>×</button>`}</span>`)}</div>`;
+const ScanList=({scans,onRemove})=>!scans||!scans.length?html`<p className="muted small">No scanned pages attached.</p>`:html`<div className="photos">${scans.map((x,i)=>html`<span key=${x.id||i} className="scanitem"><a className="ph" href=${x.url} target="_blank" rel="noopener" title=${x.name}>${x.mime==='application/pdf'?html`<span className="pdfbox">PDF<br/><small>${x.name}</small></span>`:html`<img src=${x.url} alt=${x.name||'Scanned page'}/>`}</a>${onRemove&&html`<button type="button" className="x" aria-label=${'Remove '+x.name} onClick=${()=>onRemove(i)}>×</button>`}</span>`)}</div>`;
 /* choose files, they are sent to the server and the list is returned through onAdd */
 const ScanPicker=({onAdd,label='Add scanned pages or photos',id='scan-in'})=>{
  const {toast}=useApp();const [busy,setBusy]=useState(false);

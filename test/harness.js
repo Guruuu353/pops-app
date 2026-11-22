@@ -41,6 +41,4 @@ const login = async (page, base, email, pw, newpw) => {
   if (newpw) { await page.waitForSelector('#np'); await page.fill('#cp', pw); await page.fill('#np', newpw); await page.fill('#np2', newpw); await page.click('button[type=submit]'); }
   await page.waitForSelector('.app, .fa', { timeout: 10000 });
 };
-// time fields are 12-hour pickers (hour / minute / AM-PM); set one from a 24 h value
-async function setTime(p, sel, v) { const [h, m] = v.split(':').map(Number); const w = p.locator(sel).locator('xpath=..'); await w.locator('select').nth(0).selectOption(String(h % 12 || 12)); await w.locator('select').nth(1).selectOption(String(m).padStart(2, '0')); await w.locator('select').nth(2).selectOption(h < 12 ? 'AM' : 'PM'); }
-module.exports = { start, browser, login, ROLES, MODS, setTime };
+module.exports = { start, browser, login, ROLES, MODS };

@@ -64,16 +64,15 @@ const Progress=({v,tone})=>html`<div className="prog" role="progressbar" aria-va
 const Tabs=({tabs,value,onChange})=>html`<div className="tabs" role="tablist">${tabs.map(t=>html`<button key=${t[0]} role="tab" aria-selected=${value===t[0]} className=${value===t[0]?'on':''} onClick=${()=>onChange(t[0])}>${t[1]}</button>`)}</div>`;
 const Field=({label,id,children,wide})=>html`<div className=${'field '+(wide?'wide':'')}><label htmlFor=${id}>${label}</label>${children}</div>`;
 const Sel=({id,value,onChange,opts})=>html`<select id=${id} value=${value} onChange=${e=>onChange(e.target.value)}>${opts.map(o=>Array.isArray(o)?html`<option key=${o[0]} value=${o[0]}>${o[1]}</option>`:html`<option key=${o} value=${o}>${o}</option>`)}</select>`;
-const Inp=({id,value,onChange,type='text',placeholder,list})=>type==='time'?html`<${Tm12} id=${id} value=${value} onChange=${onChange}/>`:html`<input id=${id} type=${type} value=${value} placeholder=${placeholder} list=${list} onChange=${e=>onChange(e.target.value)}/>`;
+const Inp=({id,value,onChange,type='text',placeholder,list})=>html`<input id=${id} type=${type} value=${value} placeholder=${placeholder} list=${list} onChange=${e=>onChange(e.target.value)}/>`;
 
-const Table=({cols,rows,onRow,empty='No records to show.',sel,find,size,exp})=>{
+const Table=({cols,rows,onRow,empty='No records to show.',sel,find,size})=>{
  const [pg,setPg]=useState(0);const [sz,setSz]=useState(size||25);const [q,setQ]=useState('');
  const all=q.trim()?rows.filter(r=>JSON.stringify(Object.values(r)).toLowerCase().includes(q.trim().toLowerCase())):rows;
  const pages=Math.max(1,Math.ceil(all.length/sz));const cur=Math.min(pg,pages-1);
  useEffect(()=>{setPg(0);},[q,sz]);
  const vis=all.length>sz?all.slice(cur*sz,cur*sz+sz):all;
- const xcols=cols.filter(c=>c.h);const xrows=()=>all.map(r=>xcols.map(c=>plainOf(c.r?c.r(r):r[c.k])));
- return html`<div>${exp&&rows.length>0&&html`<div className="texp"><span className="muted small">${all.length} record${all.length===1?'':'s'}</span><span className="btnrow"><button type="button" className="btn small" onClick=${()=>{if(!previewPdf(exp,{title:exp,sub:'Patte Conservation · Iweni LMMA · POps',head:xcols.map(c=>c.h),rows:xrows()}))alert('Could not make the PDF');}}><${Icon} n="eye" s=${14}/> Preview PDF</button><button type="button" className="btn small" onClick=${()=>saveCSV(exp.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.csv',[xcols.map(c=>c.h),...xrows()])}><${Icon} n="download" s=${14}/> CSV</button></span></div>`}${find&&rows.length>8&&html`<div className="search tsearch"><${Icon} n="search" s=${16}/><input aria-label="Search this list" placeholder="Search this list" value=${q} onChange=${e=>setQ(e.target.value)}/></div>`}<div className="tscroll"><table className="tbl stack"><thead><tr>${cols.map(c=>html`<th key=${c.k} className=${c.cls||''}>${c.h}</th>`)}</tr></thead><tbody>${vis.length?vis.map((r,i)=>html`<tr key=${r.id||r.no||i} className=${(onRow?'click ':'')+(sel&&sel===r.id?'sel':'')} onClick=${onRow?()=>onRow(r):null} tabIndex=${onRow?0:null} onKeyDown=${onRow?e=>{if(e.key==='Enter')onRow(r);}:null}>${cols.map(c=>html`<td key=${c.k} data-label=${c.h} className=${c.cls||''}>${c.r?c.r(r):r[c.k]}</td>`)}</tr>`):html`<tr><td colSpan=${cols.length} className="empty">${q?'Nothing matches your search.':empty}</td></tr>`}</tbody></table></div>
+ return html`<div>${find&&rows.length>8&&html`<div className="search tsearch"><${Icon} n="search" s=${16}/><input aria-label="Search this list" placeholder="Search this list" value=${q} onChange=${e=>setQ(e.target.value)}/></div>`}<div className="tscroll"><table className="tbl stack"><thead><tr>${cols.map(c=>html`<th key=${c.k} className=${c.cls||''}>${c.h}</th>`)}</tr></thead><tbody>${vis.length?vis.map((r,i)=>html`<tr key=${r.id||r.no||i} className=${(onRow?'click ':'')+(sel&&sel===r.id?'sel':'')} onClick=${onRow?()=>onRow(r):null} tabIndex=${onRow?0:null} onKeyDown=${onRow?e=>{if(e.key==='Enter')onRow(r);}:null}>${cols.map(c=>html`<td key=${c.k} data-label=${c.h} className=${c.cls||''}>${c.r?c.r(r):r[c.k]}</td>`)}</tr>`):html`<tr><td colSpan=${cols.length} className="empty">${q?'Nothing matches your search.':empty}</td></tr>`}</tbody></table></div>
  ${all.length>10&&html`<div className="pager" role="navigation" aria-label="Pages"><span>${cur*sz+1}–${Math.min(all.length,cur*sz+sz)} of ${all.length}</span><span className="pgb"><button type="button" className="btn small" disabled=${cur===0} onClick=${()=>setPg(0)} aria-label="First page">«</button><button type="button" className="btn small" disabled=${cur===0} onClick=${()=>setPg(cur-1)}>Previous</button><b>${cur+1} / ${pages}</b><button type="button" className="btn small" disabled=${cur>=pages-1} onClick=${()=>setPg(cur+1)}>Next</button><button type="button" className="btn small" disabled=${cur>=pages-1} onClick=${()=>setPg(pages-1)} aria-label="Last page">»</button></span><select aria-label="Rows per page" value=${sz} onChange=${e=>setSz(+e.target.value)}>${[10,25,50,100].map(n=>html`<option key=${n} value=${n}>${n} per page</option>`)}</select></div>`}</div>`;};
 
 const Drawer=({open,onClose,title,sub,children,foot,wide})=>{
@@ -138,103 +137,3 @@ const along=(pts,t)=>{const seg=[];let tot=0;for(let i=1;i<pts.length;i++){const
 const useLive=(enabled=true)=>{const [t,setT]=useState(.45);useEffect(()=>{if(!enabled)return;const i=setInterval(()=>setT(v=>v>=.98?.45:v+.012),1100);return()=>clearInterval(i);},[enabled]);return t;};
 
 const MapLegend=({layers})=>html`<ul className="mlegend">${LAYERS.filter(l=>layers.includes(l.id)).map(l=>html`<li key=${l.id}><svg width="16" height="16" viewBox="-12 -12 24 24"><g stroke="var(--surface)" strokeWidth="1.5">${l.shape==='line'?html`<path d="M-10,0 H10" stroke=${l.color} strokeWidth="4"/>`:l.shape==='zone'?html`<rect x="-9" y="-9" width="18" height="18" fill=${l.color} fillOpacity=".4" stroke=${l.color} strokeWidth="2"/>`:l.shape==='tri'?html`<path d="M0,-10 L10,8 L-10,8 Z" fill=${l.color}/>`:l.shape==='dia'?html`<path d="M0,-10 L10,0 L0,10 L-10,0 Z" fill=${l.color}/>`:l.shape==='sq'?html`<rect x="-8" y="-8" width="16" height="16" fill=${l.color}/>`:l.shape==='hex'?html`<path d="M-5,-9 L5,-9 L10,0 L5,9 L-5,9 L-10,0 Z" fill=${l.color}/>`:l.shape==='flag'?html`<path d="M-6,10 V-10 L9,-5 L-6,0" fill=${l.color}/>`:html`<circle r="8" fill=${l.color}/>`}</g></svg>${l.label}</li>`)}</ul>`;
-
-/* ============ Update 5: 12-hour clock, file preview, PDF export, scroll buttons ============ */
-/* Times are stored as HH:MM (24 h) so records stay sortable. Everything shown to people is 12 hour. */
-const T12=s=>{const m=/^(\d{1,2}):(\d{2})/.exec(s||'');if(!m)return s||'';const h=+m[1];return ((h%12)||12)+':'+m[2]+' '+(h<12?'AM':'PM');};
-const Tm12=({id,value,onChange,label})=>{
- const m=/^(\d{1,2}):(\d{2})/.exec(value||'');
- const [loc,setLoc]=useState(()=>m?{h:String((+m[1]%12)||12),m:m[2],a:+m[1]<12?'AM':'PM'}:{h:'',m:'',a:'AM'});
- useEffect(()=>{const q=/^(\d{1,2}):(\d{2})/.exec(value||'');if(q)setLoc({h:String((+q[1]%12)||12),m:q[2],a:+q[1]<12?'AM':'PM'});else if(!value)setLoc(o=>o.h&&o.m?{h:'',m:'',a:o.a}:o);},[value]);
- const up=n=>{setLoc(n);if(n.h&&n.m!==''){let h=(+n.h)%12;if(n.a==='PM')h+=12;onChange(pad(h)+':'+n.m);}else if(!n.h&&n.m==='')onChange('');};
- return html`<span className="tm12" role="group" aria-label=${label||'Time'}>
-  <select id=${id} aria-label="Hour" value=${loc.h} onChange=${e=>up({...loc,h:e.target.value,m:loc.m===''?'00':loc.m})}><option value="">--</option>${Array.from({length:12},(_,i)=>html`<option key=${i+1} value=${String(i+1)}>${i+1}</option>`)}</select>
-  <select aria-label="Minute" value=${loc.m} onChange=${e=>up({...loc,m:e.target.value})}><option value="">--</option>${Array.from({length:60},(_,i)=>html`<option key=${i} value=${pad(i)}>${pad(i)}</option>`)}</select>
-  <select aria-label="AM or PM" value=${loc.a} onChange=${e=>up({...loc,a:e.target.value})}><option>AM</option><option>PM</option></select></span>`;
-};
-
-/* ---- preview first, download second ---- */
-const PREV={fn:null};
-const openPreview=d=>{if(!d||!d.url)return;if(PREV.fn)PREV.fn(d);else window.open(d.url,'_blank','noopener');};
-const isPdfF=d=>/pdf/i.test(d.mime||'')||/^data:application\/pdf/.test(d.url||'')||/\.pdf(\?|$)/i.test(d.name||'');
-const isImgF=d=>/^image\//.test(d.mime||'')||/^data:image\//.test(d.url||'')||/\.(png|jpe?g|gif|webp)(\?|$)/i.test(d.name||'');
-let pdfjsP=null;
-const loadPdfjs=()=>pdfjsP||(pdfjsP=new Promise((ok,no)=>{const B='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';if(window.pdfjsLib)return ok(window.pdfjsLib);const s=document.createElement('script');s.src=B+'pdf.min.js';s.crossOrigin='anonymous';s.onload=async()=>{try{const t=await (await fetch(B+'pdf.worker.min.js')).text();window.pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([t],{type:'text/javascript'}));ok(window.pdfjsLib);}catch(e){no(e);}};s.onerror=()=>no(new Error('pdf.js'));document.head.appendChild(s);}));
-const PdfPages=({url})=>{
- const host=useRef(null);const [st,setSt]=useState('load');
- useEffect(()=>{let dead=false;setSt('load');if(host.current)host.current.innerHTML='';
-  (async()=>{try{const lib=await loadPdfjs();const buf=await (await fetch(url)).arrayBuffer();const doc=await lib.getDocument({data:buf}).promise;const w=Math.max(260,Math.min((host.current&&host.current.clientWidth)||600,1000));
-   for(let i=1;i<=doc.numPages&&!dead;i++){const pg=await doc.getPage(i);const v0=pg.getViewport({scale:1});const sc=w/v0.width,dpr=Math.min(window.devicePixelRatio||1,2.5);const v=pg.getViewport({scale:sc*dpr});const c=document.createElement('canvas');c.width=v.width;c.height=v.height;c.style.width=w+'px';c.style.height=(v.height/dpr)+'px';c.className='pv-page';host.current.appendChild(c);await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;}
-   if(!dead)setSt('ok');}catch(e){if(!dead){pdfjsP=null;setSt('fail');}}})();return()=>{dead=true;};},[url]);
- return html`<div>${st==='load'&&html`<p className="muted small pv-msg">Loading the preview…</p>`}<div ref=${host} className="pv-pages"></div>${st==='fail'&&html`<div><object data=${url} type="application/pdf" className="pv-obj"><p className="muted pv-msg">This device cannot show a PDF inside the page. Press Download to open it in your PDF viewer.</p></object></div>`}</div>`;
-};
-const PreviewHost=()=>{
- const [d,setD]=useState(null);
- useEffect(()=>{PREV.fn=setD;return()=>{PREV.fn=null;};},[]);
- useEffect(()=>{if(!d)return;const f=e=>{if(e.key==='Escape')setD(null);};window.addEventListener('keydown',f);return()=>window.removeEventListener('keydown',f);},[d]);
- if(!d)return null;
- const dl=()=>{const a=document.createElement('a');a.href=d.url;a.download=d.name||'file';document.body.appendChild(a);a.click();a.remove();if(d.onDownload)d.onDownload();};
- const pdf=isPdfF(d),img=isImgF(d);
- return html`<div className="overlay center pv-ov" onClick=${()=>setD(null)}><div className="modal wide pv" role="dialog" aria-modal="true" aria-label=${'Preview '+(d.name||'')} onClick=${e=>e.stopPropagation()}>
-  <header><h2>${d.name||'Preview'}</h2><button className="iconbtn" onClick=${()=>setD(null)} aria-label="Close preview"><${Icon} n="x"/></button></header>
-  <div className="modal-b pv-b">${img?html`<img className="pv-img" src=${d.url} alt=${d.name||'Preview'}/>`:pdf?html`<${PdfPages} key=${d.url} url=${d.url}/>`:html`<p className="muted">There is no preview for this kind of file. Press Download to save it.</p>`}</div>
-  <footer><span className="btnrow"><${Btn} onClick=${()=>setD(null)}>Close</${Btn}><${Btn} kind="primary" icon="download" onClick=${dl}>Download</${Btn}></span></footer></div></div>`;
-};
-/* a link that opens the preview instead of leaving the page */
-const FileLink=({f,children,className,title})=>html`<a className=${className||''} href=${f.url} title=${title||f.name||''} target="_blank" rel="noopener" onClick=${e=>{e.preventDefault();openPreview({url:f.url,name:f.name||(isPdfF(f)?'document.pdf':'image.jpg'),mime:f.mime});}}>${children}</a>`;
-
-/* ---- a small PDF writer for tables (no library, works offline) ---- */
-const HW=[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
-const pdfClean=s=>String(s==null?'':s).replace(/→/g,'->').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/…/g,'...').replace(/[–]/g,'-').replace(/[—]/g,'-').replace(/·/g,'-').replace(/[\r\n\t]+/g,' ').replace(/[^\x20-\x7e\xa0-\xff]/g,'?');
-const pdfW=(s,sz,b)=>{let w=0;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);w+=(c>=32&&c<=126?HW[c-32]:556);}return w*sz/1000*(b?1.06:1);};
-const pdfWrap=(s,max,sz,b)=>{s=pdfClean(s);if(pdfW(s,sz,b)<=max)return [s];const out=[];let line='';s.split(' ').forEach(w=>{while(pdfW(w,sz,b)>max){let k=w.length;while(k>1&&pdfW(w.slice(0,k),sz,b)>max)k--;if(line){out.push(line);line='';}out.push(w.slice(0,k));w=w.slice(k);}const t=line?line+' '+w:w;if(pdfW(t,sz,b)<=max)line=t;else{out.push(line);line=w;}});if(line)out.push(line);return out.length?out:[''];};
-const pdfEsc=s=>s.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
-const makePdfBlob=({title,sub,kpis,head,rows,foot})=>{
- const PW=842,PH=595,M=34,AW=PW-2*M;const ncol=head.length;const sz=ncol>11?6.5:ncol>8?7.5:8.5,lh=sz*1.3,pd=3;
- const cells=rows.map(r=>head.map((_,i)=>pdfClean(r[i])));
- const nat=head.map((h,i)=>Math.max(pdfW(pdfClean(h),sz,true),...cells.slice(0,300).map(r=>Math.min(pdfW(r[i],sz),230)))+2*pd+2);
- let tot=nat.reduce((a,b)=>a+b,0);let cw=nat.slice();if(tot>AW){const minw=Math.min(40,AW/ncol);cw=nat.map(w=>Math.max(minw,w*AW/tot));tot=cw.reduce((a,b)=>a+b,0);const k=AW/tot;cw=cw.map(w=>w*k);}
- const pages=[];let ops=[];let y=0;const stamped='Generated by POps on '+pdfClean(stamp());
- const txt=(x,yy,s,size,bold)=>ops.push('BT /'+(bold?'F2':'F1')+' '+size+' Tf '+x.toFixed(1)+' '+yy.toFixed(1)+' Td ('+pdfEsc(s)+') Tj ET');
- const newPage=first=>{if(ops.length)pages.push(ops);ops=[];y=PH-M;
-  if(first){txt(M,y-14,pdfClean(title),16,true);y-=22;if(sub){txt(M,y-8,pdfClean(sub),9,false);y-=14;}
-   if(kpis&&kpis.length){const t=kpis.map(k=>pdfClean(k[0])+': '+pdfClean(k[1])).join('   |   ');pdfWrap(t,AW,9,false).forEach(l=>{txt(M,y-8,l,9,true);y-=12;});y-=4;}}
-  else{txt(M,y-9,pdfClean(title)+' (continued)',9,true);y-=16;}
-  hdrRow();};
- const hdrRow=()=>{const hl=head.map((h,i)=>pdfWrap(h,cw[i]-2*pd,sz,true));const n=Math.max(...hl.map(l=>l.length));const hh=n*lh+2*pd;ops.push('0.04 0.42 0.49 rg '+M+' '+(y-hh).toFixed(1)+' '+AW.toFixed(1)+' '+hh.toFixed(1)+' re f 1 1 1 rg');let x=M;hl.forEach((l,i)=>{l.forEach((t,j)=>txt(x+pd,y-pd-sz-j*lh+1,t,sz,true));x+=cw[i];});ops.push('0 0 0 rg');y-=hh;};
- newPage(true);
- cells.forEach((r,ri)=>{const wl=r.map((c,i)=>pdfWrap(c,cw[i]-2*pd,sz,false));const n=Math.max(1,...wl.map(l=>l.length));const rh=n*lh+2*pd;if(y-rh<M+16)newPage(false);
-  if(ri%2)ops.push('0.95 0.97 0.97 rg '+M+' '+(y-rh).toFixed(1)+' '+AW.toFixed(1)+' '+rh.toFixed(1)+' re f 0 0 0 rg');
-  let x=M;wl.forEach((l,i)=>{l.forEach((t,j)=>txt(x+pd,y-pd-sz-j*lh+1,t,sz,false));x+=cw[i];});y-=rh;ops.push('0.8 0.84 0.85 RG 0.4 w '+M+' '+y.toFixed(1)+' m '+(M+AW).toFixed(1)+' '+y.toFixed(1)+' l S');});
- if(!rows.length){txt(M+4,y-14,'No records for these dates.',9,false);}
- pages.push(ops);
- const N=pages.length;const objs=[];const add=s=>{objs.push(s);return objs.length;};
- add('<< /Type /Catalog /Pages 2 0 R >>');add('');add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
- const kids=[];pages.forEach((p,i)=>{const fl=pdfClean(foot||stamped)+'  -  Page '+(i+1)+' of '+N;const body=p.join('\n')+'\nBT /F1 7 Tf '+M+' 18 Td ('+pdfEsc(fl)+') Tj ET';const c=add('<< /Length '+body.length+' >>\nstream\n'+body+'\nendstream');const pg=add('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PW+' '+PH+'] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents '+c+' 0 R >>');kids.push(pg+' 0 R');});
- objs[1]='<< /Type /Pages /Kids ['+kids.join(' ')+'] /Count '+N+' >>';
- let out='%PDF-1.4\n';const offs=[];objs.forEach((o,i)=>{offs.push(out.length);out+=(i+1)+' 0 obj\n'+o+'\nendobj\n';});
- const xr=out.length;out+='xref\n0 '+(objs.length+1)+'\n0000000000 65535 f \n'+offs.map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size '+(objs.length+1)+' /Root 1 0 R >>\nstartxref\n'+xr+'\n%%EOF';
- const u8=new Uint8Array(out.length);for(let i=0;i<out.length;i++)u8[i]=out.charCodeAt(i)&255;
- return new Blob([u8],{type:'application/pdf'});
-};
-/* build the PDF, then show it in the preview window. The person decides whether to download. */
-const previewPdf=(name,opts)=>{try{const b=makePdfBlob(opts);openPreview({url:URL.createObjectURL(b),name:name.replace(/\.pdf$/i,'')+'.pdf',mime:'application/pdf'});return true;}catch(e){console.error(e);return false;}};
-/* plain text of a cell, even when it was drawn as markup */
-const plainOf=n=>{if(n==null||n===false||n===true)return '';if(typeof n==='string'||typeof n==='number')return String(n);if(Array.isArray(n))return n.map(plainOf).join('');if(n.props)return plainOf(n.props.children);return '';};
-
-/* ---- scroll buttons: jump to the top or bottom of long pages, lists, forms and pop-up windows ---- */
-const ScrollBtns=()=>{
- const [s,setS]=useState({up:false,down:false});const tg=useRef('win');
- useEffect(()=>{
-  const geo=()=>{let t=tg.current;if(t!=='win'&&(!t||!document.body.contains(t)))t=tg.current='win';
-   if(t==='win'){const e=document.scrollingElement||document.documentElement;return {top:e.scrollTop,max:e.scrollHeight-e.clientHeight};}
-   return {top:t.scrollTop,max:t.scrollHeight-t.clientHeight};};
-  const calc=()=>{const g=geo();const up=g.max>500&&g.top>300,down=g.max>500&&g.max-g.top>300;setS(o=>o.up===up&&o.down===down?o:{up,down});};
-  const on=e=>{const el=e.target;if(el===document||el===document.documentElement||el===document.body||el===window)tg.current='win';else if(el.scrollHeight>el.clientHeight+300&&el.clientHeight>120)tg.current=el;else return;calc();};
-  document.addEventListener('scroll',on,true);const iv=setInterval(()=>{/* a pop-up window or drawer on top wins over the page behind it */const top=document.querySelector('.pv .modal-b,.modal-b,.drawer-b,.dr-b');if(top&&top.scrollHeight>top.clientHeight+300&&tg.current==='win'&&document.querySelector('.overlay'))tg.current=top;if(!document.querySelector('.overlay')&&tg.current!=='win'&&!document.body.contains(tg.current))tg.current='win';calc();},700);
-  window.addEventListener('resize',calc);calc();
-  return()=>{document.removeEventListener('scroll',on,true);clearInterval(iv);window.removeEventListener('resize',calc);};},[]);
- const go=top=>{const t=tg.current;const e=t==='win'?window:t;const max=t==='win'?(document.scrollingElement||document.documentElement).scrollHeight:t.scrollHeight;try{e.scrollTo({top:top?0:max,behavior:'smooth'});}catch(x){e.scrollTo(0,top?0:max);}};
- if(!s.up&&!s.down)return null;
- return html`<div className="scrollbtns" role="group" aria-label="Scroll">${s.up&&html`<button type="button" className="sbtn" aria-label="Go to the top" title="Top" onClick=${()=>go(true)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>`}${s.down&&html`<button type="button" className="sbtn" aria-label="Go to the bottom" title="Bottom" onClick=${()=>go(false)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>`}</div>`;
-};

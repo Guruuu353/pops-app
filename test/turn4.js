@@ -10,7 +10,7 @@ const { start, browser, login } = require('./harness');
   // patrol with several BMUs, agencies, other leader
   await ap.goto(S.base + '/#patrols'); await ap.waitForSelector('text=Patrols & Field Activities');
   await ap.click('button:has-text("New patrol"), button:has-text("Create")');
-  await ap.click('button:has-text("Joint with other BMUs")');
+  await ap.click('button:has-text("Joint patrol")');
   await ap.click('label:has-text("Shela BMU") input'); await ap.click('label:has-text("Faza BMU") input');
   await ap.fill('[aria-label="Other BMU name"]', 'Siyu BMU'); await ap.click('.modal button:has-text("Add") >> nth=0');
   await ap.click('label:has-text("Kenya Wildlife Service") input'); await ap.click('label:has-text("Kenya Forest") input').catch(() => {});
@@ -39,12 +39,12 @@ const { start, browser, login } = require('./harness');
   // tourism entry with vessel, other BMU, receipt
   await ap.goto(S.base + '/#tourism'); await ap.waitForSelector('text=New visitor entry'); await ap.click('button:has-text("New visitor entry")');
   await ap.fill('#tn', 'Test group'); await ap.fill('#tvn', 'Mihreen'); await ap.fill('#tvr', 'lfb 3817');
-  await ap.fill('#tcp', 'Captain Ali'); await ap.selectOption('#tfb', 'shela');
+  await ap.selectOption('#tb', 'other'); await ap.fill('#tbo', 'Kiunga'); await ap.selectOption('#tfb', 'shela'); await ap.selectOption('#ttb', 'other'); await ap.fill('#tto', 'Siyu');
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
   await ap.setInputFiles('#trcf', { name: 'r.png', mimeType: 'image/png', buffer: png }); await ap.waitForSelector('.rcpt-v');
   await ap.click('.modal button:has-text("Submit")'); await ap.waitForTimeout(1500);
   const t = (await docs0('tour'))[0] || {};
-  check('visitor entry has typed vessel, registration, captain, moved from', t.vessel === 'Mihreen' && t.vreg === 'LFB 3817' && t.fromBmu === 'shela' && t.captain === 'Captain Ali' && t.dest, JSON.stringify(t).slice(0, 300));
+  check('visitor entry has typed vessel, registration, movement, other BMU', t.vessel === 'Mihreen' && t.vreg === 'LFB 3817' && t.fromBmu === 'shela' && t.toOther === 'Siyu' && t.bmuOther === 'Kiunga', JSON.stringify(t).slice(0, 300));
   check('receipt stored with the record', t.rcpt && t.rcpt.url, JSON.stringify(t.rcpt || {}).slice(0, 80));
   // imported patrol fills the forms from the entry log
   await S.call('PUT', '/docs/patrols/IMP-1', { data: { id: 'IMP-1', iso: '2025-05-19', date: '19 May 2025', leader: 'Ali Shee', rangers: ['Ali Shee'], bmu: 'pate', start: '16:00', end: '18:30', status: 'Completed', imported: true, challenges: 'No boundary markers', chal: { weather: true, otherText: 'Rough sea' }, observations: 'Fishermen inside', action: 'Awareness' } }, S.adminToken);

@@ -17,7 +17,7 @@ const GUIDE=[
   'On Start patrol the phone shows exactly where you are: inside or outside the Iweni LMMA, the zone, and your coordinates.',
   'While the patrol runs, the position is saved every 20 seconds. Crossing the LMMA edge is written into the patrol timeline (Entered the LMMA, Left the LMMA).',
   'The count of patrols inside the LMMA uses these recorded coordinates. A patrol that only says "Iweni" in its area name, but whose track stayed outside, is not counted as inside.',
-  'The Super Admin chooses Single BMU or Joint with other BMUs when creating a patrol. Joint patrols travel far and raise an alert after 30 minutes without an update. Single patrols wait 2 hours by default (up to 3). Both can be changed per patrol and in Settings.']],
+  'The Super Admin chooses Single patrol or Joint patrol when creating a patrol. Joint patrols travel far and raise an alert after 30 minutes without an update. Single patrols wait 2 hours by default (up to 3). Both can be changed per patrol and in Settings.']],
  ['feed','Feeding records and templates',[
   'Open Import. Choose the sheet type: Daily patrol log or Entry (fisher check) log.',
   'Download the template below, or use your own table. Column names are matched by meaning, so extra or reordered columns are fine.',

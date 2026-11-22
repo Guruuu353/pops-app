@@ -43,8 +43,8 @@ const { start, browser, login } = require('./harness');
   // patrols: joint/single
   await ap.goto(S.base + '/#patrols'); await ap.waitForSelector('text=Patrols & Field Activities');
   await ap.click('button:has-text("New patrol"), button:has-text("Create")');
-  check('patrol type offered', await ap.isVisible('button:has-text("Joint with other BMUs")'));
-  await ap.click('button:has-text("Joint with other BMUs")');
+  check('patrol type offered', await ap.isVisible('button:has-text("Joint patrol")'));
+  await ap.click('button:has-text("Joint patrol")');
   check('joint shows agencies and 30 min alert', await ap.isVisible('text=Kenya Wildlife Service') && /30 minutes/.test(await ap.innerText('.modal')));
   await ap.keyboard.press('Escape');
   // ranger SOS on a phone, inside the LMMA
