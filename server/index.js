@@ -360,7 +360,7 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
   R('DELETE', '/api/zones/:id', true, ({ user, params }) => { if (!['admin'].includes(user.role)) throw forbid(); run('DELETE FROM zones WHERE id=?', params.id); audit(user, 'zone_deleted', 'zone', params.id); return { ok: true }; });
   R('PUT', '/api/landmarks', true, ({ user, body }) => {
     if (!['admin'].includes(user.role)) throw forbid();
-    const rows = (body.landmarks || []).slice(0, 200).map((p, i) => ({ id: String(p.id || 'lm-' + i + '-' + Date.now().toString(36)), name: String(p.name || '').trim().slice(0, 80), kind: String(p.kind || 'village').slice(0, 20), lat: +p.lat, lon: +p.lon }));
+    const rows = (body.landmarks || []).slice(0, 200).map((p, i) => ({ id: String(p.id || 'lm-' + i + '-' + Date.now().toString(36)), name: String(p.name || '').trim().slice(0, 80), kind: String(p.kind || 'village').slice(0, 20), village: String(p.village || '').trim().slice(0, 80), note: String(p.note || '').trim().slice(0, 200), lat: +p.lat, lon: +p.lon }));
     if (rows.some((p) => !p.name || !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || p.lon < 39 || p.lon > 42.5 || p.lat < -3.5 || p.lat > -0.5)) throw bad('Each place needs a name and coordinates on the Lamu coast');
     db.setSetting('landmarks', rows); audit(user, 'landmarks_saved', 'zone', null, { n: rows.length }); return { landmarks: rows };
   });

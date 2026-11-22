@@ -1,13 +1,15 @@
 /* ============ POps reference data and lookups. Names and records come from the server. ============ */
 const {useState,useEffect,useMemo,useRef,useCallback,createContext,useContext}=React;
-const html=htm.bind(React.createElement);
+/* every time shown on screen is 12 hour: text such as 14:05 is shown as 2:05 PM (stored values and time inputs stay HH:MM) */
+const fix12=s=>s.indexOf(':')<0?s:s.replace(/(^|[^\d:.])([01]?\d|2[0-3]):([0-5]\d)(?![\d:]|\s?[AaPp][Mm])/g,(m,a,h,mm)=>a+((+h%12)||12)+':'+mm+(+h<12?' AM':' PM'));
+const html=htm.bind((type,props,...kids)=>React.createElement(type,props,...kids.map(k=>typeof k==='string'?fix12(k):k)));
 const Ctx=createContext(null);
 const useApp=()=>useContext(Ctx);
 
 const KES=n=>'KES '+Math.round(n).toLocaleString('en-US');
 const KESk=n=>n>=1e6?'KES '+(n/1e6).toFixed(2)+'M':n>=1e4?'KES '+(n/1e3).toFixed(1)+'k':KES(n);
 const pad=n=>String(n).padStart(2,'0');
-const stamp=(d=new Date())=>`${pad(d.getDate())} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const stamp=(d=new Date())=>`${pad(d.getDate())} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getFullYear()}, ${(d.getHours()%12)||12}:${pad(d.getMinutes())} ${d.getHours()<12?'AM':'PM'}`;
 
 /* ---------- Iweni LMMA coordinates, exactly as supplied by the client ---------- */
 const LMMA_PTS=[

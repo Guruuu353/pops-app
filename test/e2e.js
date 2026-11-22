@@ -1,5 +1,5 @@
 // Real-flow browser test against the real server (no demo data). Run: node --no-warnings test/e2e.js
-const { start, browser, login } = require('./harness');
+const { start, browser, login, setTime } = require('./harness');
 (async () => {
   const S = await start(); const B = await browser(); let bad = 0;
   const check = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + (x || ''))); if (!c) bad++; };
@@ -29,12 +29,12 @@ const { start, browser, login } = require('./harness');
   const C = await B.open(S.base); const cp = C.page;
   await login(cp, S.base, 'cox@test.org', 'Start2026', 'Pass2026word');
   await cp.goto(S.base + '/#boats'); await cp.waitForSelector('text=Test Boat');
-  await cp.click('button:has-text("Add log entry")'); await cp.fill('#vdp', '07:00'); await cp.fill('#va', '10:00');
+  await cp.click('button:has-text("Add log entry")'); await setTime(cp, '#vdp', '07:00'); await setTime(cp, '#va', '10:00');
   await cp.click('.modal button:has-text("Submit entry")'); await cp.waitForSelector('text=hour meter reading at arrival', { timeout: 4000 }).catch(() => {});
   check('coxswain cannot submit without both hour meters', (await docs0('vlog')).length === 0);
   await cp.fill('#vmE1', '103'); await cp.fill('#vmE2', '93'); await cp.click('.modal button:has-text("Submit entry")'); await cp.waitForTimeout(900);
   const vl = await docs('vlog'); check('vessel log saved with both engine readings', vl.length === 1 && vl[0].m.E1 === 103 && vl[0].m.E2 === 93, JSON.stringify(vl).slice(0, 300));
-  await cp.click('button:has-text("Add log entry")'); await cp.fill('#vdp', '12:00'); await cp.click('.modal button:has-text("Save as draft")'); await cp.waitForTimeout(900);
+  await cp.click('button:has-text("Add log entry")'); await setTime(cp, '#vdp', '12:00'); await cp.click('.modal button:has-text("Save as draft")'); await cp.waitForTimeout(900);
   check('vessel log draft kept', (await docs('vlog')).filter(x => x.draft).length === 1);
   // ranger on a phone
   const R = await B.open(S.base, { viewport: { width: 390, height: 844 }, permissions: ['geolocation'], geolocation: { latitude: -2.2, longitude: 41.0 } }); const rp = R.page;
@@ -46,9 +46,9 @@ const { start, browser, login } = require('./harness');
   await rp.click('button:has-text("Add another fisher")'); await rp.fill('[aria-label="Fisher 3 name"]', 'Said Mzee');
   await rp.selectOption('#ck-c', 'L1'); await rp.click('.bgrid button.go:has-text("Save")');
   await rp.waitForSelector('text=1. Juma Ali');
-  await rp.click('button:has-text("Observation")'); await rp.fill('#fo-tm', '09:15'); await rp.fill('#fo-n', 'Turtle seen'); await rp.click('.bgrid button.go:has-text("Save")');
+  await rp.click('button:has-text("Observation")'); await setTime(rp, '#fo-tm', '09:15'); await rp.fill('#fo-n', 'Turtle seen'); await rp.click('.bgrid button.go:has-text("Save")');
   await rp.click('button.warn:has-text("Incident")'); await rp.fill('#fi-d', 'Illegal net'); await rp.fill('[aria-label="Person 1 name"]', 'Person One');
-  await rp.click('button:has-text("Add another person")'); await rp.fill('[aria-label="Person 2 name"]', 'Person Two'); await rp.fill('#fi-tm', '09:40'); await rp.click('.bgrid button.warn:has-text("Save")');
+  await rp.click('button:has-text("Add another person")'); await rp.fill('[aria-label="Person 2 name"]', 'Person Two'); await setTime(rp, '#fi-tm', '09:40'); await rp.click('.bgrid button.warn:has-text("Save")');
   await rp.waitForTimeout(1200);
   let pt = (await docs('patrols'))[0];
   check('patrol saved while recording: 3 fisher rows, observation with time', pt && pt.enc.length === 3 && pt.obsList[0].time === '09:15' && pt.status === 'Active', JSON.stringify(pt || {}).slice(0, 300));
