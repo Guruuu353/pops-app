@@ -452,9 +452,17 @@ function createApp({ dbFile, webDir, adminEmail, adminPassword }) {
     run("INSERT INTO docs(coll,id,data,author_id,created_at,updated_at) VALUES('pos',?,?,?,?,?) ON CONFLICT(coll,id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at", user.id, d, user.id, now, now);
     return { ok: true };
   });
+  R('POST', '/api/pos/stop', true, ({ user }) => {
+    const prev = one("SELECT data FROM docs WHERE coll='pos' AND id=?", user.id);
+    if (!prev) return { ok: true };
+    let d = {}; try { d = JSON.parse(prev.data); } catch (e) {}
+    const now = nowIso(); d.sharing = false; d.stopped = now;
+    run("UPDATE docs SET data=?,updated_at=? WHERE coll='pos' AND id=?", JSON.stringify(d), now, user.id);
+    return { ok: true };
+  });
   R('GET', '/api/pos', true, ({ user }) => {
     if (!['admin', 'board', 'officer', 'ranger', 'cox'].includes(user.role)) throw forbid();
-    const cutoff = Date.now() - 12 * 3600e3;
+    const cutoff = Date.now() - 24 * 3600e3;
     return { staff: q("SELECT data FROM docs WHERE coll='pos'").map((r) => JSON.parse(r.data)).filter((x) => Date.parse(x.at) > cutoff) };
   });
   const collOf = (name, user, mode) => { const c = COLL[name]; if (!c) throw nf('Unknown collection'); if (!c[mode].includes(user.role)) throw forbid('Your role cannot ' + (mode === 'w' ? 'change' : 'view') + ' this'); return c; };

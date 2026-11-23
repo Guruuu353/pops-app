@@ -24,7 +24,7 @@ const infName=c=>{if(c===''||c==null)return 'No infringement';const x=infItem(c)
 const infShow=c=>{const x=infItem(c);return x?x.code:c;};
 const GEARS=['Hand line','Gillnet','Long line hooks','Trap or basket','Spear gun','Beach seine','Monofilament gillnet','Undersize net','Trawl net','Scoop net','Ring net','Trammel net','Trolling net','Harpoon','Hooked stick','Pointed stick','None','Other'];
 const ACTIONS=['Advised or warned','Gear confiscated','Catch released','Referred to Fisheries','Handed to Police or Coast Guard','No action needed'];
-const OBJECTIVES=['Surveillance','Enforcement','Joint patrol','Monitoring and research','Other'];
+const OBJECTIVES=['Surveillance','Enforcement','Beach patrol','Joint patrol','Monitoring and research','Other'];
 const AGENCIES=[['bmu','BMU (including boatmen)'],['cfd','County Fisheries Dept'],['cps','County Police Service'],['kfs','Kenya Fisheries Service (KeFS)'],['kforest','Kenya Forest Service (KFS)'],['kws','Kenya Wildlife Service (KWS)'],['kps','Kenya Police Service'],['ap','Administration Police'],['dci','Directorate of Criminal Investigations (DCI)'],['kcg','Kenya Coast Guard Service'],['knavy','Kenya Navy'],['kma','Kenya Maritime Authority'],['kpa','Kenya Ports Authority'],['kmfri','KMFRI (Marine and Fisheries Research)'],['nema','NEMA'],['lcg','Lamu County Government'],['other','Other (specify)']];
 const CHAL={fuel:['Fuel shortage','Uhaba wa mafuta'],weather:['Bad weather','Hali mbaya ya anga'],mech:['Mechanical issues','Boti kuharibika'],resist:['Resistance from fishers','Usumbufu wa wavuvi'],other:['Other','Mengine']};
 const ATTACH=[['capture','Patrol data capture form'],['costing','Patrol costing table'],['seizure','Seizure form'],['mcs','MCS outcome data compilation form'],['other','Other']];

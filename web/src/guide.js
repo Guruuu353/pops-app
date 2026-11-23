@@ -4,7 +4,7 @@ const TEMPLATES={
  entry:{name:'Entry (fisher check) log template',file:'entry-log-template.csv',head:['Date','Time','Location','Vessel Name','Boat Number','Person(s) Involved','Type of Infringement','Action Taken','Evidence Collected',"Ranger's Name"],ex:['19/5/2025','3:00pm','Inside closed area (LMMA)','Jiulize','463','Mohammed Badi; Said Ahmed','Fishing','Awareness and warning','Photo taken','Ali']}
 };
 const gCsvCell=v=>/[",\n]/.test(v)?'"'+String(v).replace(/"/g,'""')+'"':v;
-const dlTemplate=t=>{const txt=[t.head,t.ex].map(r=>r.map(gCsvCell).join(',')).join('\n')+'\n';const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv'}));a.download=t.file;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};
+const dlTemplate=t=>{const txt=[t.head,t.ex].map(r=>r.map(gCsvCell).join(',')).join('\n')+'\n';downloadText(t.file,txt,'text/csv');};
 const GUIDE=[
  ['sos','SOS emergency alert',[
   'Every ranger screen has a red SOS button at the top. Tap it from the home screen or in the middle of a patrol.',

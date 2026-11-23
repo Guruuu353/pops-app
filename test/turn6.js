@@ -62,6 +62,39 @@ const { start, browser, login } = require('./harness');
   check('admin cannot delete themselves', !d2.ok && /own account/.test(JSON.stringify(d2)), JSON.stringify(d2));
   await ap.goto(S.base + '/#staff'); await ap.waitForSelector('text=Staff'); await ap.click('tbody tr >> nth=1'); await ap.waitForSelector('.drawer');
   check('Delete user button in staff drawer', await ap.isVisible('.drawer button:has-text("Delete user")'));
+  // ---- update 6b ----
+  await ap.evaluate(async () => { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); });
+  // clustering + deep zoom
+  for (let i = 0; i < 6; i++) await S.call('PUT', '/docs/incidents/IC-' + i, { data: { id: 'IC-' + i, patrol: 'PT-A', date: dd(1).txt, cat: 'Illegal fishing', ranger: 'Amina Hassan', lat: -2.2125 + i * 0.00005, lon: 41.012 + i * 0.00005, stage: 0, desc: 'x', action: '-', ref: 'None' } }, S.adminToken);
+  await ap.goto(S.base + '/#dashboard'); await ap.goto(S.base + '/#live-map'); await ap.reload(); await ap.waitForSelector('.gm-livebtn', { timeout: 10000 }).catch(async () => { console.log('ERRS', A.errs.slice(0, 4)); process.exit(1); });
+  await ap.waitForTimeout(800);
+  for (let i = 0; i < 5; i++) { await ap.click('.gm-ctl button[aria-label="Zoom out"]'); }
+  await ap.waitForTimeout(500);
+  check('crowded icons fold into a numbered group when zoomed out', (await ap.locator('.gm-cl').count()) >= 1, await ap.locator('.gm-cl').count());
+  await ap.locator('.gm-cl').first().click({ force: true }); await ap.waitForTimeout(500);
+  for (let i = 0; i < 12; i++) await ap.click('.gm-ctl button[aria-label="Zoom in"]');
+  await ap.waitForTimeout(400);
+  check('can zoom in much deeper and the group separates into pins', (await ap.locator('.gm-cl').count()) === 0);
+  // stopped sharing + merge
+  await S.call('POST', '/pos', { lat: -2.2, lon: 41.0, acc: 5, doing: 'In the office' }, S.adminToken);
+  await S.call('POST', '/pos/stop', {}, S.adminToken);
+  const p2 = await S.call('GET', '/pos', null, S.adminToken);
+  await ap.evaluate(async () => { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); });
+  check('stopped sharing is kept with its last position', p2.staff.some(x => x.sharing === false && x.stopped));
+  await ap.goto(S.base + '/#dashboard'); await ap.goto(S.base + '/#live-map'); await ap.reload(); await ap.waitForSelector('.gm-livebtn', { timeout: 10000 });
+  await ap.click('.gm-livebtn'); await ap.waitForSelector('.gm-list');
+  const lt = await ap.innerText('.gm-list');
+  check('live list shows the person who stopped sharing', /stopped sharing/i.test(lt), lt.slice(0, 200));
+  check('one row per person (patrol, phone, boat merged)', (lt.match(/Amina Hassan/g) || []).length <= 1, lt.slice(0, 300));
+  // beach patrol + template preview
+  await ap.goto(S.base + '/#patrols'); await ap.click('button:has-text("Create patrol")'); await ap.waitForSelector('.modal');
+  const opts = await ap.locator('.modal select#po option').allInnerTexts();
+  check('Beach patrol is an objective', opts.includes('Beach patrol'), opts.join('|'));
+  await ap.keyboard.press('Escape');
+  await ap.goto(S.base + '/#guide'); await ap.waitForSelector('button:has-text("Daily patrol log template")');
+  let dl = false; ap.once('download', () => { dl = true; });
+  await ap.click('button:has-text("Daily patrol log template")'); await ap.waitForSelector('.pv-ov'); await ap.waitForTimeout(300);
+  check('template opens in a preview first, no automatic download', !dl && (await ap.locator('.pv-b table th').count()) >= 3, dl);
   const errs = A.errs.filter(e => !/Geolocation|geolocation|tile|ERR_|Failed to load resource/i.test(e));
   check('no page errors', errs.length === 0, errs.slice(0, 3).join(' | '));
   console.log(bad ? bad + ' FAILED' : 'ALL PASS'); process.exit(bad ? 1 : 0);

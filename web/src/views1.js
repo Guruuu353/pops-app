@@ -19,11 +19,11 @@ const useMapData=()=>{
  const sites=(coral||[]).filter(c=>c.kind==='site'&&c.lat!=null&&c.lon!=null&&allowed.includes('restoration')).filter(c=>role!=='officer'||(assign[account.id]||[]).length).map(c=>{const [x,y]=proj(c.lat,c.lon);return {id:c.id,layer:'restoration',x,y,title:c.name,when:c.date,team:c.team||'',desc:c.desc||c.meth||'',status:'Logged',follow:''};});
  const act=allowed.includes('activity'),rg=allowed.includes('rangers')||allowed.includes('boats');
  const pItems=patrols.filter(p=>p.status!=='Draft'&&vis(p)).flatMap(p=>patrolItems(p,{activity:act})).filter(i=>(i.layer==='rangers'||i.layer==='boats')?rg:act);
- const staffItems=allowed.includes('staff')?staffPos.map(u=>{const [x,y]=proj(u.lat,u.lon);const z=zoneAt(u.lat,u.lon);const mins=Math.round((Date.now()-new Date(u.at))/60000);return {id:'st-'+u.id,layer:'staff',x,y,title:u.name+' ('+(ROLES[u.role]?ROLES[u.role].label:u.role)+')',when:mins<2?'Just now':mins+' min ago',team:u.doing||'',desc:(z?'Inside the Iweni LMMA':'Outside the Iweni LMMA')+(u.phone?' · '+u.phone:'')+(u.trail&&u.trail.length>1?' · '+u.trail.length+' recent positions':''),status:mins>30?'Stale':'Live',follow:''};}):[];
- const staffTracks=allowed.includes('staff')?staffPos.filter(u=>u.trail&&u.trail.length>1).map(u=>({id:'sttrk-'+u.id,status:'Active',bmu:'',ll:u.trail.map(t=>[t[0],t[1]])})):[];
+ const staffItems=allowed.includes('staff')?staffPos.map(u=>{const [x,y]=proj(u.lat,u.lon);const z=zoneAt(u.lat,u.lon);const mins=Math.round((Date.now()-new Date(u.at))/60000);const off=u.sharing===false;const ago=m=>m<2?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' d ago';const smins=off?Math.round((Date.now()-new Date(u.stopped||u.at))/60000):0;return {id:'st-'+u.id,layer:'staff',x,y,ts:+new Date(u.at),person:u.name,off,dim:off,title:u.name+' ('+(ROLES[u.role]?ROLES[u.role].label:u.role)+')'+(off?' · stopped sharing':''),when:off?'Stopped sharing '+ago(smins)+'. Last position '+ago(mins):mins<2?'Just now':ago(mins),team:u.doing||'',desc:(off?'Last known position. ':'')+(z?'Inside the Iweni LMMA':'Outside the Iweni LMMA')+(u.phone?' · '+u.phone:'')+(!off&&u.trail&&u.trail.length>1?' · '+u.trail.length+' recent positions':''),status:off?'Stopped sharing':mins>10?'Stale':'Live',follow:off?'The person switched location sharing off. This is where they were last seen.':''};}):[];
+ const staffTracks=allowed.includes('staff')?staffPos.filter(u=>u.trail&&u.trail.length>1&&u.sharing!==false).map(u=>({id:'sttrk-'+u.id,status:'Active',bmu:'',ll:u.trail.map(t=>[t[0],t[1]])})):[];
  const sosItems=allowed.includes('sos')?sos.filter(x=>['Active','Acknowledged'].includes(x.status)&&x.lat!=null).map(x=>{const [px,py]=proj(x.lat,x.lon);return {id:'sos-'+x.id,layer:'sos',x:px,y:py,title:'SOS: '+x.by,when:new Date(x.at).toLocaleTimeString('en-GB',{hour:'numeric',minute:'2-digit',hour12:true}),team:x.phone||'',desc:x.kind+(x.note?' · '+x.note:'')+' · '+x.zone,status:x.status,follow:'Call the ranger and send help. Mark it resolved on the red bar.'};}):[];
  const bmuItems=allowed.includes('bmus')?BMUS.filter(b=>b.lat&&b.lon).map(b=>{const [px,py]=proj(b.lat,b.lon);return {id:'bmu-'+b.id,layer:'bmus',x:px,y:py,title:b.name,when:'',team:'',desc:b.other?'Neighbouring BMU':'Patte project BMU',status:'Logged',follow:''};}):[];
- return {allowed,tracks:[...tracks,...staffTracks],allTracks:allTr,items:[...sites,...inc.map(incItem),...pItems,...staffItems,...sosItems,...bmuItems]};
+ return {allowed,tracks:[...tracks,...staffTracks],allTracks:allTr,items:[...sites,...inc.map(incItem),...mergeLive([...pItems,...staffItems]),...sosItems,...bmuItems]};
 };
 
 /* ---------- what happened on a patrol: timeline and map items ---------- */
@@ -34,11 +34,33 @@ const TrackStats=({p})=>{const km=patrolKm(p);const st=(p.stops||[]);const items
 const EVL={start:'Patrol started',pause:'Paused',resume:'Resumed',stop:'Patrol stopped',submit:'Submitted for review',draft:'Saved as draft',offline:'Network lost',online:'Network back',gps_lost:'GPS lost',gps_ok:'GPS back',obs:'Observation',check:'Fisher check',seizure:'Check with seizure',incident:'Incident',photo:'Photograph',where:'Start position',enter:'Entered the LMMA',exit:'Left the LMMA',sos:'SOS sent',halt:'Stopped',go:'Moving again',gap:'Signal gap, distance estimated',screen_off:'Screen off',screen_on:'Screen on'};
 const hmOf=iso=>{const d=new Date(iso);return isNaN(d)?'':((d.getHours()%12)||12)+':'+pad(d.getMinutes())+(d.getHours()<12?' AM':' PM');};
 const evList=p=>{const ev=(p.events||[]).slice();if(ev.length)return ev;if(p.imported){const o=[];if(p.start)o.push({t:'',k:'start',n:'Left at '+p.start+(p.areas&&p.areas[0]?' for '+p.areas[0]:'')});if(p.observations)o.push({t:'',k:'obs',n:'Observed: '+p.observations});if(p.challenges)o.push({t:'',k:'obs',n:'Challenges: '+p.challenges});if(p.action&&p.action!=='—')o.push({t:'',k:'obs',n:'Action taken: '+p.action});if(p.end&&p.end!=='—')o.push({t:'',k:'stop',n:'Back at '+p.end});return o;}/* older records: rebuild from the lists */const o=[];if(p.start)o.push({t:'',k:'start',n:'Started '+p.start,ll:p.track&&p.track[0]||null});(p.obsList||[]).forEach(x=>o.push({t:'',k:'obs',n:x.type+(x.time?' '+x.time:''),ll:x.ll||null}));(p.enc||[]).forEach(x=>o.push({t:'',k:x.seized?'seizure':'check',n:x.name||'',ll:x.ll||null}));(p.incList||[]).forEach(x=>o.push({t:'',k:'incident',n:x.cat||'',ll:x.ll||null}));return o;};
+/* One entry per person: a ranger on patrol, the same person sharing from a phone and the boat they use become a single marker and list row. */
+const mergeLive=list=>{
+ const live=list.filter(i=>['rangers','boats','staff'].includes(i.layer));const rest=list.filter(i=>!live.includes(i));
+ const nm=s=>String(s||'').replace(/\s*\([^)]*\)\s*·?.*$/,'').trim().toLowerCase();
+ const groups=new Map();const add=(k,i)=>{if(!groups.has(k))groups.set(k,[]);groups.get(k).push(i);};
+ live.filter(i=>i.pid).forEach(i=>add('p:'+i.pid,i));
+ const pname=new Map();groups.forEach((g,k)=>{const r=g.find(i=>i.layer==='rangers');if(r)pname.set(nm(r.title),k);});
+ live.filter(i=>!i.pid).forEach(i=>add(pname.get(nm(i.person||i.title))||'s:'+i.id,i));
+ const out=[];
+ groups.forEach(g=>{if(g.length===1){out.push(g[0]);return;}
+  const base=g.find(i=>i.layer==='rangers')||g[0];const st=g.find(i=>i.layer==='staff');const bt=g.find(i=>i.layer==='boats');
+  const freshest=g.filter(i=>i.ts).sort((a,b)=>b.ts-a.ts)[0]||base;
+  const useSt=st&&!st.off&&st.ts&&(!base.ts||st.ts>base.ts+60000);
+  const m={...base,...(useSt?{x:st.x,y:st.y}:{})};
+  const extra=[bt&&('Boat: '+(bt.boat||'')),st&&(st.off?'Phone: stopped sharing':'Phone sharing: '+st.when)].filter(Boolean);
+  m.desc=base.desc+(extra.length?' · '+extra.join(' · '):'');
+  if(bt&&bt.team)m.team=bt.team;
+  m.merged=g.length;m.ts=freshest.ts;
+  out.push(m);});
+ return [...rest,...out];
+};
+
 const patrolItems=(p,o={})=>{
  const out=[];const evs=evList(p);const lastLL=(p.track&&p.track.length?p.track[p.track.length-1]:null)||evs.slice().reverse().map(e=>e.ll).find(Boolean)||null;
  if(['Active','Paused'].includes(p.status)&&lastLL){const [x,y]=proj(lastLL[0],lastLL[1]);const age=p.seen?(Date.now()-new Date(p.seen))/60000:null;const stale=age!=null&&age>3;
-  out.push({id:'rg-'+p.id,layer:'rangers',x,y,title:(p.leader||'Ranger')+(p.status==='Paused'?' (paused)':' (live)'),when:p.seen?'Last update '+hmOf(p.seen):'Started '+p.start,team:(p.rangers||[]).join(', '),desc:p.id+' · '+(patrolNow(p)?(patrolNow(p).in?'Inside the LMMA':'Outside the LMMA'):'No position')+(p.mode==='joint'?' · Joint patrol':'')+' · '+(p.area||'—')+(p.km?' · '+p.km.toFixed(1)+' km':'')+(stale?' · no update for '+Math.round(age)+' min (out of network?)':''),status:p.status==='Paused'?'Paused':stale?'Overdue':'Active',follow:'Open patrol '+p.id+' for the full timeline'});
-  if(p.boat)out.push({id:'bt-'+p.id,layer:'boats',x,y,title:p.boat+' (on patrol)',when:'Left at '+p.start,team:(p.cox?p.cox+' (coxswain), ':'')+(p.rangers||[]).join(', '),desc:'Patrol '+p.id,status:'Active',follow:'The trip is added to the vessel log when the patrol ends.'});}
+  out.push({id:'rg-'+p.id,layer:'rangers',x,y,ts:p.seen?+new Date(p.seen):null,pid:p.id,title:(p.leader||'Ranger')+(p.status==='Paused'?' (paused)':' (live)'),when:p.seen?'Last update '+hmOf(p.seen):'Started '+p.start,team:(p.rangers||[]).join(', '),desc:p.id+' · '+(patrolNow(p)?(patrolNow(p).in?'Inside the LMMA':'Outside the LMMA'):'No position')+(p.mode==='joint'?' · Joint patrol':'')+' · '+(p.area||'—')+(p.km?' · '+p.km.toFixed(1)+' km':'')+(stale?' · no update for '+Math.round(age)+' min (out of network?)':''),status:p.status==='Paused'?'Paused':stale?'Overdue':'Active',follow:'Open patrol '+p.id+' for the full timeline'});
+  if(p.boat)out.push({id:'bt-'+p.id,layer:'boats',x,y,pid:p.id,boat:p.boat,ts:p.seen?+new Date(p.seen):null,title:p.boat+' (on patrol)',when:'Left at '+p.start,team:(p.cox?p.cox+' (coxswain), ':'')+(p.rangers||[]).join(', '),desc:'Patrol '+p.id,status:'Active',follow:'The trip is added to the vessel log when the patrol ends.'});}
  if(o.activity)evs.forEach((e,i)=>{if(['pause','resume','stop','offline','online','gps_lost','gps_ok','halt','gap','obs','check','seizure','incident','photo','start'].indexOf(e.k)<0)return;const ll=e.ll||(e.k==='start'&&p.track&&p.track[0]);if(!ll)return;const [x,y]=proj(ll[0],ll[1]);out.push({id:'ev-'+p.id+'-'+i,layer:'activity',x,y,title:EVL[e.k]||e.k,when:(e.t?hmOf(e.t)+', ':'')+p.date,team:p.leader+(p.cox?', coxswain '+p.cox:''),desc:(e.n||'')+' ('+p.id+')',status:p.status,follow:''});});
  return out;
 };
@@ -91,9 +113,9 @@ const LiveMap=()=>{
  const [shr,setShr]=useState(()=>{try{return localStorage.getItem('pops-share')==='1';}catch(e){return false;}});
  const lastPost=useRef(0);
  useEffect(()=>{if(!me)return;if(!navigator.geolocation){toast('This device cannot give its position');setMe(false);return;}
-  const id=navigator.geolocation.watchPosition(p=>{const pos={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};setMyPos(pos);const n=Date.now();let on=false;try{on=localStorage.getItem('pops-share')==='1';}catch(e){}if(on&&n-lastPost.current>45000){lastPost.current=n;let doing='';try{doing=localStorage.getItem('pops-doing')||'';}catch(e){}api('POST','/pos',{lat:pos.lat,lon:pos.lon,acc:pos.acc,doing}).catch(()=>{});}},()=>{toast('Could not get your position. Allow location for this site.');setMe(false);},{enableHighAccuracy:true,maximumAge:5000,timeout:30000});
+  const id=navigator.geolocation.watchPosition(p=>{const pos={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};setMyPos(pos);},()=>{toast('Could not get your position. Allow location for this site.');setMe(false);},{enableHighAccuracy:true,maximumAge:5000,timeout:30000});
   return()=>{navigator.geolocation.clearWatch(id);setMyPos(null);};},[me]);
- const setShare=v=>{setShr(v);try{localStorage.setItem('pops-share',v?'1':'0');}catch(e){}window.dispatchEvent(new Event('pops-share'));if(v)setMe(true);toast(v?'Others can now see where you are':'You are hidden from the map for others');};
+ const setShare=v=>{setShr(v);try{localStorage.setItem('pops-share',v?'1':'0');}catch(e){}window.dispatchEvent(new Event('pops-share'));if(!v)api('POST','/pos/stop',{}).catch(()=>{});if(v)setMe(true);toast(v?'Others can now see where you are':'You are hidden from the map for others');};
  useEffect(()=>{const f=focusRef.current;if(f&&f.mod==='live-map'&&f.sos){const it=items.find(i=>i.id==='sos-'+f.id);if(it){setSel(it);focusRef.current=null;}}
   if(f&&f.mod==='live-map'&&f.patrol){const it=items.find(i=>i.id==='rg-'+f.id);if(it)setSel(it);if(allTracks.some(t=>t.id===f.id)){setFocus(f.id);setFitKey(f.id+':'+Date.now());}focusRef.current=null;}},[items.length,allTracks.length]);
  const tog=id=>setLayers(l=>l.includes(id)?l.filter(x=>x!==id):[...l,id]);

@@ -123,7 +123,7 @@ const HBars=({data,color='var(--c1)',fmt=v=>v})=>{const mx=Math.max(...data.map(
 
 /* ---------- Iweni map ---------- */
 const poly=pts=>pts.map(p=>p.join(',')).join(' ');
-const Marker=({layer,x,y,sel,onClick,label,dim,hl})=>{
+const Marker=({layer,x,y,sel,onClick,label,dim,hl,k})=>{
  const L=LAYERS.find(l=>l.id===layer);const c=L.color;const s=sel?1.35:1;
  const g=(shape=>{switch(shape){
   case 'tri':return html`<path d="M0,-11 L10,8 L-10,8 Z" fill=${c}/>`;
@@ -133,7 +133,7 @@ const Marker=({layer,x,y,sel,onClick,label,dim,hl})=>{
   case 'hex':return html`<path d="M-5,-9 L5,-9 L10,0 L5,9 L-5,9 L-10,0 Z" fill=${c}/>`;
   case 'flag':return html`<path d="M-6,10 V-10 L9,-5 L-6,0" fill=${c}/>`;
   default:return html`<circle r="8" fill=${c}/>`;}})(L.shape);
- return html`<g className="mk" transform=${`translate(${x},${y}) scale(${s})`} onClick=${onClick} opacity=${dim?.35:1} tabIndex="0" role="button" aria-label=${label} onKeyDown=${e=>{if(e.key==='Enter')onClick();}}><circle cy=${L.shape==='pin'?-13:0} r="17" fill="transparent"/>${hl&&html`<circle cy=${L.shape==='pin'?-13:0} r="22" className="mk-hl"/>`}<g stroke="var(--surface)" strokeWidth="2.5" strokeLinejoin="round">${g}</g>${sel&&html`<circle cy=${L.shape==='pin'?-13:0} r="19" fill="none" stroke="var(--ink)" strokeWidth="2" strokeDasharray="4 3"/>`}<title>${label}</title></g>`;
+ return html`<g className="mk" transform=${`translate(${x},${y}) scale(${s*(k||1)})`} onClick=${onClick} opacity=${dim?.35:1} tabIndex="0" role="button" aria-label=${label} onKeyDown=${e=>{if(e.key==='Enter')onClick();}}><circle cy=${L.shape==='pin'?-13:0} r="17" fill="transparent"/>${hl&&html`<circle cy=${L.shape==='pin'?-13:0} r="22" className="mk-hl"/>`}<g stroke="var(--surface)" strokeWidth="2.5" strokeLinejoin="round">${g}</g>${sel&&html`<circle cy=${L.shape==='pin'?-13:0} r="19" fill="none" stroke="var(--ink)" strokeWidth="2" strokeDasharray="4 3"/>`}<title>${label}</title></g>`;
 };
 const along=(pts,t)=>{const seg=[];let tot=0;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);seg.push(d);tot+=d;}let r=t*tot;for(let i=0;i<seg.length;i++){if(r<=seg[i]){const f=r/seg[i];return[pts[i][0]+(pts[i+1][0]-pts[i][0])*f,pts[i][1]+(pts[i+1][1]-pts[i][1])*f];}r-=seg[i];}return pts[pts.length-1];};
 const useLive=(enabled=true)=>{const [t,setT]=useState(.45);useEffect(()=>{if(!enabled)return;const i=setInterval(()=>setT(v=>v>=.98?.45:v+.012),1100);return()=>clearInterval(i);},[enabled]);return t;};
@@ -169,6 +169,8 @@ const PdfPages=({url})=>{
    if(!dead)setSt('ok');}catch(e){if(!dead){pdfjsP=null;setSt('fail');}}})();return()=>{dead=true;};},[url]);
  return html`<div>${st==='load'&&html`<p className="muted small pv-msg">Loading the preview…</p>`}<div ref=${host} className="pv-pages"></div>${st==='fail'&&html`<div><object data=${url} type="application/pdf" className="pv-obj"><p className="muted pv-msg">This device cannot show a PDF inside the page. Press Download to open it in your PDF viewer.</p></object></div>`}</div>`;
 };
+const csvRows=t=>{const rows=[];let r=[],c='',q=false;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++;}else q=false;}else c+=ch;}else if(ch==='"')q=true;else if(ch===','){r.push(c);c='';}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);c='';rows.push(r);r=[];}else c+=ch;}if(c!==''||r.length){r.push(c);rows.push(r);}return rows;};
+const TextPrev=({text,csv})=>{if(csv){const rows=csvRows(text).slice(0,200);return html`<div className="tblwrap"><table className="tbl"><thead><tr>${(rows[0]||[]).map((h,i)=>html`<th key=${i}>${h}</th>`)}</tr></thead><tbody>${rows.slice(1).map((r,i)=>html`<tr key=${i}>${r.map((c,j)=>html`<td key=${j}>${c}</td>`)}</tr>`)}</tbody></table></div>`;}return html`<pre className="pv-pre">${String(text).slice(0,60000)}</pre>`;};
 const PreviewHost=()=>{
  const [d,setD]=useState(null);
  useEffect(()=>{PREV.fn=setD;return()=>{PREV.fn=null;};},[]);
@@ -178,7 +180,7 @@ const PreviewHost=()=>{
  const pdf=isPdfF(d),img=isImgF(d);
  return html`<div className="overlay center pv-ov" onClick=${()=>setD(null)}><div className="modal wide pv" role="dialog" aria-modal="true" aria-label=${'Preview '+(d.name||'')} onClick=${e=>e.stopPropagation()}>
   <header><h2>${d.name||'Preview'}</h2><button className="iconbtn" onClick=${()=>setD(null)} aria-label="Close preview"><${Icon} n="x"/></button></header>
-  <div className="modal-b pv-b">${img?html`<img className="pv-img" src=${d.url} alt=${d.name||'Preview'}/>`:pdf?html`<${PdfPages} key=${d.url} url=${d.url}/>`:html`<p className="muted">There is no preview for this kind of file. Press Download to save it.</p>`}</div>
+  <div className="modal-b pv-b">${img?html`<img className="pv-img" src=${d.url} alt=${d.name||'Preview'}/>`:pdf?html`<${PdfPages} key=${d.url} url=${d.url}/>`:d.text!=null?html`<${TextPrev} text=${d.text} csv=${/csv/i.test(d.mime||'')||/\.csv$/i.test(d.name||'')}/>`:html`<p className="muted">There is no preview for this kind of file. Press Download to save it.</p>`}</div>
   <footer><span className="btnrow"><${Btn} onClick=${()=>setD(null)}>Close</${Btn}><${Btn} kind="primary" icon="download" onClick=${dl}>Download</${Btn}></span></footer></div></div>`;
 };
 /* a link that opens the preview instead of leaving the page */

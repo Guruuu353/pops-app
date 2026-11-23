@@ -45,7 +45,7 @@ const ringsFromText=(txt,name)=>{
  const ring=t.split(/\r?\n/).map(l=>l.split(/[,;\t]/).map(x=>parseFloat(x))).filter(c=>c.length>=2&&isFinite(c[0])&&isFinite(c[1])).map(c=>[c[0],c[1]]);
  if(ring.length>=3)out.push({name,feature:{type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[ring]}}});return out;
 };
-const downloadText=(name,text,type)=>{try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:type||'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}catch(e){}};
+const downloadText=(name,text,type)=>{try{const url=URL.createObjectURL(new Blob([text],{type:type||'application/json'}));openPreview({url,name,mime:type||'application/json',text});}catch(e){}};
 const ZKIND={lmma:'LMMA boundary',gear:'Gear restricted zone',ntz:'No take zone',other:'Other'};
 
 /* ---------- Iweni LMMA ---------- */
