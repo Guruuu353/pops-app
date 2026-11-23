@@ -34,8 +34,8 @@ const { start, browser, login } = require('./harness');
   // map world zoom and live list
   await ap.goto(S.base + '/#live-map'); await ap.waitForSelector('.geomap');
   await ap.click('[aria-label="Show the whole earth"]'); await ap.waitForTimeout(300);
-  check('world button turns into back button', await ap.isVisible('[aria-label="Back to the LMMA"]'));
-  await ap.click('[aria-label="Back to the LMMA"]');
+  check('world button opens the globe with a way back', await ap.isVisible('.globe') && await ap.isVisible('.globe button:has-text("Flat map")'));
+  await ap.click('.globe button:has-text("Flat map")'); await ap.waitForTimeout(300);
   // tourism entry with vessel, other BMU, receipt
   await ap.goto(S.base + '/#tourism'); await ap.waitForSelector('text=New visitor entry'); await ap.click('button:has-text("New visitor entry")');
   await ap.fill('#tn', 'Test group'); await ap.fill('#tvn', 'Mihreen'); await ap.fill('#tvr', 'lfb 3817');

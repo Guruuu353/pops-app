@@ -651,3 +651,22 @@ div:has(>.gm-toolbtn)>.gm-leg{top:106px}
 .gm-cl{cursor:pointer}.gm-cl text{fill:#fff;font:800 12px var(--font-b);pointer-events:none;paint-order:stroke;stroke:rgba(0,0,0,.45);stroke-width:2px}.gm-cl:hover circle:last-of-type{stroke:#FFD23F}
 .gm-clnote{position:absolute;left:10px;bottom:34px;z-index:4;background:rgba(7,20,24,.82);color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;pointer-events:none;max-width:60%}
 .pv-b{position:relative}.pv-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.5);background:rgba(7,20,24,.75);color:#fff;font:700 28px/1 var(--font-b);cursor:pointer}.pv-nav.prev{left:8px}.pv-nav.next{right:8px}
+.rtlist{display:grid;gap:6px;max-height:340px;overflow:auto}.rtrow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px}.rtrow.on{border-color:var(--brand)}.danger-t{color:var(--danger,#ff6b6b)!important}
+/* update 9: globe */
+.globe{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;cursor:grab;outline:none;background:radial-gradient(ellipse at 50% 40%,#0b1f3a 0%,#04070f 70%),#04070f}
+.globe:active{cursor:grabbing}
+.globe:before{content:"";position:absolute;inset:0;background-image:radial-gradient(1px 1px at 12% 18%,#fff,transparent),radial-gradient(1px 1px at 78% 12%,#fff,transparent),radial-gradient(1.5px 1.5px at 30% 82%,#cfe,transparent),radial-gradient(1px 1px at 88% 70%,#fff,transparent),radial-gradient(1px 1px at 55% 8%,#fff,transparent),radial-gradient(1px 1px at 6% 60%,#fff,transparent),radial-gradient(1.5px 1.5px at 66% 90%,#fff,transparent),radial-gradient(1px 1px at 45% 30%,#bcd,transparent);opacity:.7;pointer-events:none}
+.globe-cv,.globe-ov{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.globe-ov{overflow:visible}.globe-ov text{font-family:var(--font-b);pointer-events:all;cursor:pointer;paint-order:stroke;stroke:rgba(0,0,0,.65);stroke-width:3px;stroke-linejoin:round}
+.gl-t.ct{fill:#fff;font-weight:800;letter-spacing:.12em}.gl-t.oc{fill:#bfe6ff;font-style:italic;font-weight:600;letter-spacing:.2em}
+.gl-eq{stroke:rgba(255,255,255,.55);stroke-width:1.2;stroke-dasharray:6 5}.gl-tr{stroke:rgba(255,255,255,.28);stroke-width:1;stroke-dasharray:2 6}
+.gl-pl text{fill:#fff;font-weight:700}.gl-dot{fill:#ffd23f;stroke:#000;stroke-width:1.2}.gl-pl.key .gl-dot{fill:#ff5470}.gl-pl.key text{fill:#ffd23f}.gl-pl{cursor:pointer;pointer-events:all}
+.gl-pulse{fill:rgba(255,84,112,.25);stroke:#ff5470;stroke-width:2;animation:glp 1.6s ease-out infinite}
+@keyframes glp{0%{transform:scale(.5);opacity:1}100%{transform:scale(1.6);opacity:0}}.gl-pulse{transform-box:fill-box;transform-origin:center}
+@media (prefers-reduced-motion:reduce){.gl-pulse{animation:none}}
+.globe-top{position:absolute;left:10px;top:10px;display:flex;gap:8px;flex-wrap:wrap;z-index:3}
+.gm-pill{background:rgba(7,20,24,.85);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;min-height:40px;padding:0 14px;font:600 13px var(--font-b);cursor:pointer}.gm-pill.on{background:var(--brand);color:var(--on-brand)}
+.globe-zoom{position:absolute;right:10px;top:10px;display:grid;gap:8px;z-index:3}.globe-zoom button{width:44px;height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.35);background:rgba(7,20,24,.85);color:#fff;font:700 22px var(--font-b);cursor:pointer}
+.globe-card{position:absolute;left:10px;right:10px;bottom:10px;max-width:460px;background:rgba(7,20,24,.92);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:12px 14px;z-index:3}.globe-card h3{margin:0 0 4px;font-size:1rem}.globe-card p{margin:0 0 8px;font-size:.88rem;line-height:1.45}.globe-card .iconbtn{position:absolute;right:6px;top:6px;color:#fff;font-size:22px;background:none;border:0;cursor:pointer}
+.globe-hint{position:absolute;left:10px;right:10px;bottom:10px;text-align:center;color:#cfe;font-size:12px;pointer-events:none;text-shadow:0 1px 3px #000}
+.globe-msg{position:absolute;z-index:4;color:#fff;background:rgba(7,20,24,.85);padding:12px 16px;border-radius:12px;text-align:center;max-width:80%}

@@ -1,0 +1,51 @@
+const { start, browser, login } = require('./harness');
+const zlib = require('zlib');
+const crc = (b) => { let c, t = []; for (let n = 0; n < 256; n++) { c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } let r = 0xffffffff; for (const x of b) r = t[(r ^ x) & 255] ^ (r >>> 8); return (r ^ 0xffffffff) >>> 0; };
+const chunk = (ty, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(ty), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+const png = (r, g, b) => { const w = 256, raw = Buffer.alloc((w * 3 + 1) * w); for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) { const o = y * (w * 3 + 1) + 1 + x * 3; raw[o] = r; raw[o + 1] = g + (x > 250 || y > 250 ? 60 : 0); raw[o + 2] = b; } const ih = Buffer.alloc(13); ih.writeUInt32BE(w, 0); ih.writeUInt32BE(w, 4); ih[8] = 8; ih[9] = 2; return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ih), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]); };
+(async () => {
+  const S = await start(); const B = await browser(); let bad = 0;
+  const check = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + (x || ''))); if (!c) bad++; };
+  const A = await B.open(S.base, { permissions: ['geolocation'], serviceWorkers: 'block' }); const ap = A.page;
+  await ap.route(/arcgisonline\.com/, (r) => {  const m = /tile\/(\d+)\/(\d+)\/(\d+)/.exec(r.request().url()) || [0, 2, 0, 0]; r.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: png(30 + (+m[3] * 37) % 120, 90 + (+m[2] * 53) % 120, 60) }); });
+  await login(ap, S.base, 'admin@test.org', 'Admin2026pw');
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const d = new Date(Date.now() - 864e5); const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); const txt = d.getDate() + ' ' + MON[d.getMonth()] + ' ' + d.getFullYear();
+  const t = []; for (let i = 0; i < 40; i++) t.push([-2.2 + Math.sin(i / 6) * 0.001, 41.0 + i * 0.0004, 0, 1760000000 + i * 5]);
+  await S.call('PUT', '/docs/patrols/PT-A', { data: { id: 'PT-A', iso, date: txt, leader: 'Amina Hassan', rangers: ['Amina'], status: 'Completed', start: '14:05', end: '17:30', track: t, km: 1.9, enc: [], seiz: [], events: [], review: 'Pending review', seen: new Date().toISOString() } }, S.adminToken);
+  await ap.evaluate(async () => { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); });
+  await ap.goto(S.base + '/#dashboard'); await ap.goto(S.base + '/#live-map'); await ap.reload(); await ap.waitForSelector('.routebar', { timeout: 10000 });
+  // manage routes
+  check('Manage routes lists the patrol', await ap.isVisible('.rtrow:has-text("PT-A")'));
+  await ap.click('.rtrow:has-text("PT-A") button:has-text("View")'); await ap.waitForTimeout(500);
+  check('View shows its route', (await ap.locator('polyline.gm-track').count()) >= 1);
+  ap.once('dialog', (dg) => dg.accept());
+  await ap.click('.rtrow:has-text("PT-A") button:has-text("Delete")'); await ap.waitForTimeout(600);
+  check('Delete removes the route (patrol stays)', (await ap.locator('polyline.gm-track').count()) === 0);
+  const pj = await S.call('GET', '/docs?only=patrols', null, S.adminToken); const pa = ((pj.docs || {}).patrols || []).find((x) => x.id === 'PT-A');
+  check('patrol record kept, track cleared on the server', !!pa && !(pa.track || (pa.data && pa.data.track) || []).length, JSON.stringify(pa).slice(0, 120));
+  // globe
+  console.log('IMG', await ap.evaluate(() => new Promise((res) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res('ok ' + i.width); i.onerror = () => res('err'); i.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/2/1/1'; })));
+  await ap.click('.gm-ctl button[aria-label*="world" i], .gm-ctl button:has-text("🌍")'); await ap.waitForSelector('.globe', { timeout: 5000 });
+  await ap.waitForSelector('.globe-ov', { timeout: 15000 }).catch(async () => { console.log('MSG', await ap.innerText('.globe').catch(() => ''), A.errs.slice(0, 3)); process.exit(1); });
+  const alpha = await ap.evaluate(() => { const c = document.querySelector('.globe-cv'); const x = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data; return [x[0], x[1], x[2], x[3]]; });
+  check('globe sphere is painted (opaque centre)', alpha[3] === 255 && alpha[0] + alpha[1] + alpha[2] > 30, alpha);
+  const corner = await ap.evaluate(() => { const c = document.querySelector('.globe-cv'); return c.getContext('2d').getImageData(2, 2, 1, 1).data[3]; });
+  check('outside the sphere stays space (transparent)', corner < 40, corner);
+  check('continent / ocean names shown', (await ap.locator('.gl-t').count()) >= 3, await ap.locator('.gl-t').count());
+  check('key place Patte Conservation marked', await ap.isVisible('.gl-pl.key') || (await ap.locator('.gl-pl.key').count()) === 1);
+  await ap.click('button:has-text("Go to Pate Island")'); await ap.waitForTimeout(1200);
+  await ap.locator('.gl-pl.key').click({ force: true }); await ap.waitForSelector('.globe-card'); check('tap shows facts and zoom button', /Iweni LMMA/.test(await ap.innerText('.globe-card')) && await ap.isVisible('.globe-card button:has-text("Zoom into the Iweni LMMA")'));
+  if (process.env.SHOT) await ap.screenshot({ path: process.env.SHOT });
+  const before = await ap.evaluate(() => document.querySelector('.globe-cv').toDataURL().length);
+  const bb = await ap.locator('.globe').boundingBox(); await ap.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await ap.mouse.down(); await ap.mouse.move(bb.x + bb.width / 2 + 120, bb.y + bb.height / 2 + 10, { steps: 6 }); await ap.mouse.up(); await ap.waitForTimeout(400);
+  const after = await ap.evaluate(() => document.querySelector('.globe-cv').toDataURL().length);
+  check('dragging turns the globe', before !== after);
+  await ap.click('.globe-card button:has-text("Zoom into the Iweni LMMA")'); await ap.waitForTimeout(600);
+  check('back on the flat map at the LMMA', (await ap.locator('.globe').count()) === 0 && (await ap.locator('.gm-ctl').count()) === 1);
+  for (let i = 0; i < 16; i++) { await ap.click('.gm-ctl button[aria-label="Zoom out"]').catch(() => {}); if ((await ap.locator('.globe').count()) > 0) break; }
+  check('zooming right out turns the map into the globe', (await ap.locator('.globe').count()) === 1);
+  await ap.keyboard.press('Escape'); await ap.waitForTimeout(400); check('Escape returns to the flat map', (await ap.locator('.globe').count()) === 0);
+  const errs = A.errs.filter((e) => !/eolocation|tile|ERR_|Failed to load|Service Worker|Canvas2D/i.test(e)); check('no page errors', errs.length === 0, errs.slice(0, 3).join('|'));
+  console.log(bad ? bad + ' FAILED' : 'ALL PASS'); process.exit(bad ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });

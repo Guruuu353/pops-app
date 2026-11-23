@@ -158,12 +158,14 @@ const GeoMap=({layers=['zones','patrols'],items=[],tracks=[],sel,onSel,points=[]
  const readout=useRef(null);const dragged=useRef(false);
  const [bearing,setBearingS]=useState(0);const bref=useRef(0);const setBearing=b=>{b=((b%360)+360)%360;bref.current=b;setBearingS(b);};
  const [full,setFull]=useState(false);const [cmp,setCmp]=useState(false);
+ const [globe,setGlobe]=useState(false);
  const [lockId,setLockId]=useState(null);const [lst,setLst]=useState(false);const wprev=useRef(null);const [isWorld,setIsWorld]=useState(false);
  const unrot=(dx,dy)=>{const t=bref.current*Math.PI/180,c=Math.cos(t),sn=Math.sin(t);return [dx*c+dy*sn,-dx*sn+dy*c];};
  const on=id=>layers.includes(id);
  const live=useLive(showLive&&on('boats'));
  const setV=v=>{vref.current=v;setView(v);};
  useEffect(()=>{if(sel)setAct(sel);},[sel]);
+ useEffect(()=>{if(view&&!compact&&!locked&&!globe&&size.w>0&&view.z<Math.log2(Math.max(200,Math.min(size.w,size.h))/256)+1.15)setGlobe(true);},[view&&view.z,size.w]);
  /* measure */
  useEffect(()=>{const el=box.current;if(!el)return;const m=()=>{const r=el.getBoundingClientRect();setSize(s=>(Math.abs(s.w-r.width)>1||Math.abs(s.h-r.height)>1)?{w:r.width,h:r.height}:s);};m();let ro;if(window.ResizeObserver){ro=new ResizeObserver(m);ro.observe(el);}window.addEventListener('resize',m);return()=>{if(ro)ro.disconnect();window.removeEventListener('resize',m);};},[]);
  /* first fit */
@@ -178,7 +180,7 @@ const GeoMap=({layers=['zones','patrols'],items=[],tracks=[],sel,onSel,points=[]
  useEffect(()=>{if(!lockItem||!vref.current)return;const [la,lo]=unproj(lockItem.x,lockItem.y);const v=vref.current;setV({...v,lat:la,lon:lo,z:Math.max(v.z,15)});},[lockKey,lockId]);
  const liveItems=items.filter(i=>['rangers','staff','sos','boats'].includes(i.layer)&&on(i.layer));
  const flyTo=it=>{if(!vref.current||it.x==null)return;const [la,lo]=unproj(it.x,it.y);setV({lat:la,lon:lo,z:Math.max(vref.current.z,16)});setIsWorld(false);};
- const world=()=>{if(!vref.current)return;if(isWorld&&wprev.current){setV(wprev.current);setIsWorld(false);return;}wprev.current=vref.current;setLockId(null);setV({lat:10,lon:20,z:Math.max(0,Math.log2(Math.min(size.w,size.h)/256))});setIsWorld(true);};
+ const world=()=>{if(!vref.current)return;if(!compact&&!locked){setGlobe(true);return;}if(isWorld&&wprev.current){setV(wprev.current);setIsWorld(false);return;}wprev.current=vref.current;setLockId(null);setV({lat:10,lon:20,z:Math.max(0,Math.log2(Math.min(size.w,size.h)/256))});setIsWorld(true);};
  const refit=()=>setIsWorld(false)||setV(fitView(LMMA_BB,size.w,size.h,40));
  const fitZone=z=>{if(vref.current)setV(fitView(bbOf(z.ll),size.w,size.h,60));};
  const pan=(dx0,dy0)=>{const v=vref.current;if(!v)return;const [dx,dy]=unrot(dx0,dy0);setV({...v,lon:lonOf(mx(v.lon,v.z)-dx,v.z),lat:latOf(my(v.lat,v.z)-dy,v.z)});};
@@ -307,6 +309,7 @@ const GeoMap=({layers=['zones','patrols'],items=[],tracks=[],sel,onSel,points=[]
     <details><summary>Map settings</summary><${MapSettings} compact=${true}/></details>
    </div></div>`}
   ${pe&&html`<${PlaceEditor} key=${pe.id||'new'+pe.lat+pe.lon} place=${pe} onClose=${()=>{setPe(null);setInfo(null);}} onSaved=${()=>setPv(n=>n+1)}/>`}
+  ${globe&&!compact&&!locked&&html`<${Globe} lat0=${view?view.lat:-2} lon0=${view?view.lon:41} onExit=${(la,lo,z)=>{setGlobe(false);setIsWorld(false);setV({lat:la,lon:lo,z:z||3});}} onLamu=${()=>{setGlobe(false);setIsWorld(false);setV(fitView(LMMA_BB,size.w,size.h,40));}}/>`}
   ${!locked&&html`<div className="gm-ctl"><button aria-label="Zoom in" onClick=${()=>zoomAt(view.z+1,size.w/2,size.h/2)}>+</button><button aria-label="Zoom out" onClick=${()=>zoomAt(view.z-1,size.w/2,size.h/2)}>−</button><button aria-label="Fit to Iweni LMMA" title="Fit to Iweni LMMA" onClick=${refit}><${Icon} n="lmma" s=${16}/></button><button aria-label=${isWorld?'Back to the LMMA':'Show the whole earth'} title=${isWorld?'Back to where you were':'Zoom out to the whole earth'} onClick=${world}>${isWorld?'↩':'🌍'}</button>${liveItems.length>0&&html`<button aria-label="List of live patrols and users" title="Live list" aria-pressed=${lst} onClick=${()=>setLst(v=>!v)}>☰</button>`}${!compact&&html`<button aria-label="Turn map left" title="Turn left (Q)" onClick=${()=>setBearing(bref.current-15)}>⟲</button><button aria-label="Turn map right" title="Turn right (E)" onClick=${()=>setBearing(bref.current+15)}>⟳</button>`}${!compact&&html`<button aria-label=${full?'Exit full screen':'Full screen'} title=${full?'Exit full screen (Esc)':'Full screen (F)'} onClick=${toggleFull}>${full?'✕':'⛶'}</button>`}</div>`}
   ${!compact&&html`<button type="button" className=${'gm-north '+(cmp?'live':'')} aria-label=${'Compass. The map is turned '+Math.round(bearing)+' degrees. Tap to point north up. Press and hold to follow the phone compass.'} title="Tap: north up. Hold: follow phone compass" onClick=${()=>{setCmp(false);setBearing(0);}} onContextMenu=${e=>{e.preventDefault();startCompass();}} onDoubleClick=${e=>{e.stopPropagation();startCompass();}}><svg viewBox="-20 -20 40 40" width="40" height="40" style=${{transform:'rotate('+(-bearing)+'deg)'}}><circle r="18" fill="rgba(7,20,24,.65)" stroke="#fff" strokeOpacity=".7"/><path d="M0,-15 L4.5,0 L0,-3 L-4.5,0 Z" fill="#ff5a4d"/><path d="M0,15 L4.5,0 L0,3 L-4.5,0 Z" fill="#fff" fillOpacity=".55"/></svg><b>${Math.round(bearing)}°${cmp?' ⌖':''}</b></button>`}
   ${!compact&&!locked&&html`<button type="button" className=${'gm-livebtn'+(lst?' on':'')} aria-pressed=${lst} onClick=${()=>setLst(v=>!v)}>Live list (${liveItems.length})</button>`}
