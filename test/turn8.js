@@ -24,18 +24,36 @@ const png = (r, g, b) => { const w = 256, raw = Buffer.alloc((w * 3 + 1) * w); f
   check('Delete removes the route (patrol stays)', (await ap.locator('polyline.gm-track').count()) === 0);
   const pj = await S.call('GET', '/docs?only=patrols', null, S.adminToken); const pa = ((pj.docs || {}).patrols || []).find((x) => x.id === 'PT-A');
   check('patrol record kept, track cleared on the server', !!pa && !(pa.track || (pa.data && pa.data.track) || []).length, JSON.stringify(pa).slice(0, 120));
+  // live user trail
+  await S.call('POST', '/pos', { lat: -2.2, lon: 41.0, acc: 5 }, S.adminToken); await S.call('POST', '/pos', { lat: -2.201, lon: 41.001, acc: 5 }, S.adminToken); await S.call('POST', '/pos', { lat: -2.202, lon: 41.002, acc: 5 }, S.adminToken);
+  await ap.evaluate(async () => { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); }); await ap.reload(); await ap.waitForSelector('.routebar', { timeout: 10000 });
+  await ap.click('.rtlist >> xpath=..//button[contains(.,"Live users")]'); await ap.waitForTimeout(300);
+  check('live user trail is listed and labelled', await ap.isVisible('.rtkind.user'));
+  ap.once('dialog', (dg) => dg.accept()); await ap.click('.rtrow:has(.rtkind.user) button:has-text("Clear")'); await ap.waitForTimeout(800);
+  const pp2 = await S.call('GET', '/pos', null, S.adminToken); check('Clear empties the saved trail', pp2.staff.every((x) => !(x.trail || []).length), JSON.stringify(pp2).slice(0, 150));
   // globe
   console.log('IMG', await ap.evaluate(() => new Promise((res) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res('ok ' + i.width); i.onerror = () => res('err'); i.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/2/1/1'; })));
   await ap.click('.gm-ctl button[aria-label*="world" i], .gm-ctl button:has-text("🌍")'); await ap.waitForSelector('.globe', { timeout: 5000 });
-  await ap.waitForSelector('.globe-ov', { timeout: 15000 }).catch(async () => { console.log('MSG', await ap.innerText('.globe').catch(() => ''), A.errs.slice(0, 3)); process.exit(1); });
+  await ap.waitForFunction(() => { const c = document.querySelector('.globe-cv'); return c && +c.dataset.hits > 0; }, null, { timeout: 15000 }).catch(async () => { console.log('MSG', A.errs.filter((e) => !/Service Worker/.test(e)).slice(0, 4)); process.exit(1); });
   const alpha = await ap.evaluate(() => { const c = document.querySelector('.globe-cv'); const x = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data; return [x[0], x[1], x[2], x[3]]; });
-  check('globe sphere is painted (opaque centre)', alpha[3] === 255 && alpha[0] + alpha[1] + alpha[2] > 30, alpha);
+  check('globe sphere is painted (opaque centre)', alpha[3] === 255, alpha);
   const corner = await ap.evaluate(() => { const c = document.querySelector('.globe-cv'); return c.getContext('2d').getImageData(2, 2, 1, 1).data[3]; });
   check('outside the sphere stays space (transparent)', corner < 40, corner);
-  check('continent / ocean names shown', (await ap.locator('.gl-t').count()) >= 3, await ap.locator('.gl-t').count());
-  check('key place Patte Conservation marked', await ap.isVisible('.gl-pl.key') || (await ap.locator('.gl-pl.key').count()) === 1);
-  await ap.click('button:has-text("Go to Pate Island")'); await ap.waitForTimeout(1200);
-  await ap.locator('.gl-pl.key').click({ force: true }); await ap.waitForSelector('.globe-card'); check('tap shows facts and zoom button', /Iweni LMMA/.test(await ap.innerText('.globe-card')) && await ap.isVisible('.globe-card button:has-text("Zoom into the Iweni LMMA")'));
+  check('names are drawn and tappable', (await ap.evaluate(() => +document.querySelector('.globe-cv').dataset.hits)) >= 3);
+  check('day and night is on', await ap.evaluate(() => document.querySelector('.globe-cv').dataset.sun === 'true'));
+  const px1 = await ap.evaluate(() => document.querySelector('.globe-cv').toDataURL().length);
+  await ap.click('button:has-text("Day and night")'); await ap.waitForTimeout(300);
+  check('day and night can be switched off', await ap.evaluate(() => document.querySelector('.globe-cv').dataset.sun === 'false'));
+  await ap.click('button:has-text("Day and night")');
+  // wheel zoom out makes the earth smaller, and back
+  const gb = await ap.locator('.globe').boundingBox(); await ap.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
+  const area = () => ap.evaluate(() => { const c = document.querySelector('.globe-cv'); const d = c.getContext('2d').getImageData(0, c.height / 2, c.width, 1).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] === 255) n++; return n; });
+  const a0 = await area(); for (let i = 0; i < 4; i++) await ap.mouse.wheel(0, 200); await ap.waitForTimeout(400); const a1 = await area();
+  for (let i = 0; i < 6; i++) await ap.mouse.wheel(0, -200); await ap.waitForTimeout(400); const a2 = await area();
+  check('scroll zooms the globe out and back in', a1 < a0 && a2 > a1, [a0, a1, a2]);
+  await ap.click('button:has-text("Go to Pate Island")'); await ap.waitForTimeout(1300);
+  const kp = await ap.evaluate(() => { const c = document.querySelector('.globe-cv'); const r = c.getBoundingClientRect(); return [r.left + +c.dataset.keyx, r.top + +c.dataset.keyy]; });
+  await ap.mouse.click(kp[0], kp[1]); await ap.waitForSelector('.globe-card', { timeout: 4000 }); check('tap shows facts and zoom button', /Iweni LMMA/.test(await ap.innerText('.globe-card')) && await ap.isVisible('.globe-card button:has-text("Zoom into the Iweni LMMA")'));
   if (process.env.SHOT) await ap.screenshot({ path: process.env.SHOT });
   const before = await ap.evaluate(() => document.querySelector('.globe-cv').toDataURL().length);
   const bb = await ap.locator('.globe').boundingBox(); await ap.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await ap.mouse.down(); await ap.mouse.move(bb.x + bb.width / 2 + 120, bb.y + bb.height / 2 + 10, { steps: 6 }); await ap.mouse.up(); await ap.waitForTimeout(400);

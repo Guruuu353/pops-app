@@ -23,7 +23,7 @@ const useMapData=()=>{
  const staffTracks=allowed.includes('staff')?staffPos.filter(u=>u.trail&&u.trail.length>1&&u.sharing!==false).map(u=>({id:'sttrk-'+u.id,status:'Active',bmu:'',ll:u.trail.map(t=>[t[0],t[1]])})):[];
  const sosItems=allowed.includes('sos')?sos.filter(x=>['Active','Acknowledged'].includes(x.status)&&x.lat!=null).map(x=>{const [px,py]=proj(x.lat,x.lon);return {id:'sos-'+x.id,layer:'sos',x:px,y:py,title:'SOS: '+x.by,when:new Date(x.at).toLocaleTimeString('en-GB',{hour:'numeric',minute:'2-digit',hour12:true}),team:x.phone||'',desc:x.kind+(x.note?' · '+x.note:'')+' · '+x.zone,status:x.status,follow:'Call the ranger and send help. Mark it resolved on the red bar.'};}):[];
  const bmuItems=allowed.includes('bmus')?BMUS.filter(b=>b.lat&&b.lon).map(b=>{const [px,py]=proj(b.lat,b.lon);return {id:'bmu-'+b.id,layer:'bmus',x:px,y:py,title:b.name,when:'',team:'',desc:b.other?'Neighbouring BMU':'Patte project BMU',status:'Logged',follow:''};}):[];
- return {allowed,tracks:[...tracks,...staffTracks],allTracks:allTr,items:[...sites,...inc.map(incItem),...mergeLive([...pItems,...staffItems]),...sosItems,...bmuItems]};
+ return {allowed,tracks:[...tracks,...staffTracks],allTracks:allTr,staffPos,items:[...sites,...inc.map(incItem),...mergeLive([...pItems,...staffItems]),...sosItems,...bmuItems]};
 };
 
 /* ---------- what happened on a patrol: timeline and map items ---------- */
@@ -100,11 +100,13 @@ const progressAlerts=(patrols,settings,now=Date.now())=>{
 const RPAL=['#35A7FF','#FF8A3D','#B26BFF','#2CD9A0','#FF5C8A','#E6C229','#5CC8FF','#9BE564'];
 const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
 const LiveMap=()=>{
- const {role,bmuId,focusRef,account,toast,openAt,setPatrols,log}=useApp();
- const {allowed,tracks,allTracks,items}=useMapData();
- const [mq,setMq]=useState('');
+ const {role,bmuId,focusRef,account,toast,openAt,setPatrols,log,patrols:allPat}=useApp();
+ const {allowed,tracks,allTracks,items,staffPos}=useMapData();
+ const [mq,setMq]=useState('');const [mt,setMt]=useState('all');const [only,setOnly]=useState(null);
+ const clearTrail=async u=>{if(!confirm('Clear the saved movement trail of '+u.name+'? Their live position stays.'))return;try{await api('DELETE','/pos/'+u.id+'/trail');log('Cleared live-user trail','Live Operations Map',u.name);toast('Trail cleared');if(only==='sttrk-'+u.id)setOnly(null);}catch(e){toast(e.message);}};
  const delRoute=t=>{if(!confirm('Delete the recorded route of '+t.id+'? The patrol record stays, but its GPS line, stops and distance are removed. This cannot be undone and is written to the audit trail.'))return;setPatrols(ps=>ps.map(p=>p.id===t.id?{...p,track:[],stops:[],km:0,routeDeleted:new Date().toISOString()}:p));if(focus===t.id)setFocus(null);log('Deleted patrol route','Live Operations Map',t.id+' ('+(t.km||0).toFixed(2)+' km)');toast('Route of '+t.id+' deleted');};
- const viewRoute=t=>{setFocus(t.id);setFitKey(t.id+':'+Date.now());};
+ const viewRoute=t=>{setOnly(null);setFocus(t.id);setFitKey(t.id+':'+Date.now());};
+ const viewTrail=u=>{setFocus(null);setOnly('sttrk-'+u.id);setFitKey('u'+u.id+Date.now());};
  const [layers,setLayers]=useState(allowed);
  useEffect(()=>setLayers(allowed),[role]);
  const [sel,setSel]=useState(null);
@@ -133,7 +135,8 @@ const LiveMap=()=>{
  const incPatrols=new Set(incAll.map(i=>i.pid).filter(Boolean));
  let trs=[...tracks];
  if(rm!=='live'&&allowed.includes('patrols')){const have=new Set(trs.map(t=>t.id));allTracks.filter(t=>inPer(t.date)&&(rm==='all'||incPatrols.has(t.id))).forEach(t=>{if(!have.has(t.id))trs.push(t);});}
- if(focus&&!trs.some(t=>t.id===focus)){const t=allTracks.find(x=>x.id===focus);if(t)trs.push(t);}
+ if(focus&&!trs.some(t=>t.id===focus)){let t=allTracks.find(x=>x.id===focus);if(!t){const p=(allPat||[]).find(x=>x.id===focus);if(p&&p.track&&p.track.length>1)t={id:p.id,status:p.status,ll:p.track,stops:p.stops,km:patrolKm(p),date:patrolIso(p),leader:p.leader||'',dateTxt:p.date};}if(t)trs.push(t);}
+ if(only){const t=tracks.find(x=>x.id===only);trs=t?[t]:[];}
  const live=t=>t.status==='Active'||t.status==='Paused';
  trs=trs.map(t=>live(t)||String(t.id).startsWith('sttrk-')?t:{...t,color:RPAL[[...String(t.id)].reduce((a,c)=>a+c.charCodeAt(0),0)%RPAL.length]});
  const shownKm=trs.filter(t=>!String(t.id).startsWith('sttrk-')).reduce((a,t)=>a+(+t.km||0),0);const shownN=trs.filter(t=>!String(t.id).startsWith('sttrk-')).length;
@@ -174,7 +177,11 @@ const LiveMap=()=>{
    html`<${Card} title="Select a map item"><p className="muted">Click a marker or a track to see its date and time, location, assigned team, description, photographs, status and follow-up actions.</p>
    <p className="muted small">Only live patrols show their route. Use the buttons above the map to see all patrols or the patrols with incidents for a period. Open the ☰ list on the map to follow a ranger, boat or staff member.</p>
    <h3 className="mini-h">Your access</h3><p className="muted small">${({admin:'Full authorized visibility.',board:'Full oversight. Exact enforcement locations are generalised.',ranger:'Assigned operational information only.',cox:'Patrols and boats you support.',officer:'Assigned project information only.',fisheries:'Permitted all-project and patrol visibility. Incidents are not shown.',bmu:'Permitted patrol and LMMA information for '+bmuName(bmuId)+'.'})[role]}</p></${Card}>`}
-   ${role==='admin'&&html`<${Card} title="Manage routes" sub="Super Admin. View a recorded route or delete one that was recorded wrongly."><input className="inp" placeholder="Search patrol, date or leader" aria-label="Search routes" value=${mq} onChange=${e=>setMq(e.target.value)} style=${{marginBottom:8}}/><div className="rtlist">${allTracks.filter(t=>(t.id+' '+(t.dateTxt||'')+' '+(t.leader||'')).toLowerCase().includes(mq.toLowerCase())).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,40).map(t=>html`<div key=${t.id} className=${'rtrow'+(focus===t.id?' on':'')}><div><b>${t.id}</b><div className="muted small">${t.dateTxt||''} · ${t.leader||'—'} · ${(+t.km||0).toFixed(2)} km · ${t.status}</div></div><span className="btnrow"><button type="button" className="btn small" onClick=${()=>viewRoute(t)}>View</button><button type="button" className="btn small danger" onClick=${()=>delRoute(t)}>Delete</button></span></div>`)}${allTracks.length===0&&html`<p className="muted small">No recorded routes yet.</p>`}</div></${Card}>`}
+   ${role==='admin'&&(()=>{const q=mq.toLowerCase();
+    const prow=(allPat||[]).filter(p=>(p.track&&p.track.length>0)||(+p.km||0)>0).map(p=>({kind:'patrol',id:p.id,date:patrolIso(p),dateTxt:p.date,leader:p.leader||'',km:patrolKm(p),status:p.status,pts:(p.track||[]).length,t:p}));
+    const urow=(staffPos||[]).filter(u=>u.trail&&u.trail.length>0).map(u=>({kind:'user',id:'u-'+u.id,u,date:String(u.at||'').slice(0,10),dateTxt:new Date(u.at).toLocaleString(),leader:u.name,km:(u.trail||[]).length>1?trkDist(u.trail.map(t=>[t[0],t[1],0,0])).km:0,status:u.sharing===false?'Stopped sharing':'Sharing',pts:u.trail.length}));
+    const rows=[...(mt==='user'?[]:prow),...(mt==='patrol'?[]:urow)].filter(r=>(r.id+' '+r.dateTxt+' '+r.leader).toLowerCase().includes(q)).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    return html`<${Card} title="Manage routes" sub="Super Admin. Every saved route: patrol routes recorded by rangers, and the movement trails of staff who share their location."><div className="seg" style=${{marginBottom:8}}>${[['all','All ('+(prow.length+urow.length)+')'],['patrol','Patrols ('+prow.length+')'],['user','Live users ('+urow.length+')']].map(([k,l])=>html`<button key=${k} type="button" className=${'segb '+(mt===k?'on':'')} aria-pressed=${mt===k} onClick=${()=>setMt(k)}>${l}</button>`)}</div><input className="inp" placeholder="Search patrol, person or date" aria-label="Search routes" value=${mq} onChange=${e=>setMq(e.target.value)} style=${{marginBottom:8}}/>${only&&html`<button type="button" className="btn small" style=${{marginBottom:8}} onClick=${()=>setOnly(null)}>Show all routes on the map again</button>`}<div className="rtlist">${rows.slice(0,60).map(r=>html`<div key=${r.id} className=${'rtrow'+((focus===r.id||only==='sttrk-'+(r.u&&r.u.id))?' on':'')}><div><b>${r.kind==='patrol'?r.id:r.leader}</b> <span className=${'rtkind '+r.kind}>${r.kind==='patrol'?'Patrol route':'Live user trail'}</span><div className="muted small">${r.kind==='patrol'?(r.dateTxt||'')+' · '+(r.leader||'—')+' · ':'Last '+r.dateTxt+' · '}${(+r.km||0).toFixed(2)} km · ${r.pts} points · ${r.status}</div></div><span className="btnrow">${r.kind==='patrol'?html`<button type="button" className="btn small" disabled=${!r.pts} onClick=${()=>viewRoute({id:r.id})}>View</button><button type="button" className="btn small danger" onClick=${()=>delRoute({id:r.id,km:r.km})}>Delete</button>`:html`<button type="button" className="btn small" disabled=${r.pts<2} onClick=${()=>viewTrail(r.u)}>View</button><button type="button" className="btn small danger" onClick=${()=>clearTrail(r.u)}>Clear</button>`}</span></div>`)}${rows.length===0&&html`<p className="muted small">No saved routes match.</p>`}</div></${Card}>`;})()}
   </aside>
  </div>`}
  </div>`;
