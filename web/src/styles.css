@@ -650,3 +650,4 @@ div:has(>.gm-toolbtn)>.gm-leg{top:106px}
 .pv-pre{white-space:pre-wrap;word-break:break-word;font:12px/1.5 ui-monospace,monospace;margin:0}.pv-b .tblwrap{overflow:auto}
 .gm-cl{cursor:pointer}.gm-cl text{fill:#fff;font:800 12px var(--font-b);pointer-events:none;paint-order:stroke;stroke:rgba(0,0,0,.45);stroke-width:2px}.gm-cl:hover circle:last-of-type{stroke:#FFD23F}
 .gm-clnote{position:absolute;left:10px;bottom:34px;z-index:4;background:rgba(7,20,24,.82);color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;pointer-events:none;max-width:60%}
+.pv-b{position:relative}.pv-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.5);background:rgba(7,20,24,.75);color:#fff;font:700 28px/1 var(--font-b);cursor:pointer}.pv-nav.prev{left:8px}.pv-nav.next{right:8px}

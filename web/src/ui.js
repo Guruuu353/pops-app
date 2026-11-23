@@ -172,19 +172,24 @@ const PdfPages=({url})=>{
 const csvRows=t=>{const rows=[];let r=[],c='',q=false;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++;}else q=false;}else c+=ch;}else if(ch==='"')q=true;else if(ch===','){r.push(c);c='';}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);c='';rows.push(r);r=[];}else c+=ch;}if(c!==''||r.length){r.push(c);rows.push(r);}return rows;};
 const TextPrev=({text,csv})=>{if(csv){const rows=csvRows(text).slice(0,200);return html`<div className="tblwrap"><table className="tbl"><thead><tr>${(rows[0]||[]).map((h,i)=>html`<th key=${i}>${h}</th>`)}</tr></thead><tbody>${rows.slice(1).map((r,i)=>html`<tr key=${i}>${r.map((c,j)=>html`<td key=${j}>${c}</td>`)}</tr>`)}</tbody></table></div>`;}return html`<pre className="pv-pre">${String(text).slice(0,60000)}</pre>`;};
 const PreviewHost=()=>{
- const [d,setD]=useState(null);
- useEffect(()=>{PREV.fn=setD;return()=>{PREV.fn=null;};},[]);
- useEffect(()=>{if(!d)return;const f=e=>{if(e.key==='Escape')setD(null);};window.addEventListener('keydown',f);return()=>window.removeEventListener('keydown',f);},[d]);
+ const [d0,setD]=useState(null);const [ix,setIx]=useState(0);
+ useEffect(()=>{PREV.fn=x=>{setD(x);setIx(x&&x.idx||0);};return()=>{PREV.fn=null;};},[]);
+ const lst=d0&&d0.list;const d=lst?{...lst[Math.min(ix,lst.length-1)],list:lst}:d0;
+ const go=n=>{if(lst)setIx(i=>(i+n+lst.length)%lst.length);};
+ const tch=useRef(null);
+ useEffect(()=>{if(!d0)return;const f=e=>{if(e.key==='Escape')setD(null);else if(e.key==='ArrowRight')go(1);else if(e.key==='ArrowLeft')go(-1);};window.addEventListener('keydown',f);return()=>window.removeEventListener('keydown',f);},[d0,lst&&lst.length]);
  if(!d)return null;
  const dl=()=>{const a=document.createElement('a');a.href=d.url;a.download=d.name||'file';document.body.appendChild(a);a.click();a.remove();if(d.onDownload)d.onDownload();};
  const pdf=isPdfF(d),img=isImgF(d);
  return html`<div className="overlay center pv-ov" onClick=${()=>setD(null)}><div className="modal wide pv" role="dialog" aria-modal="true" aria-label=${'Preview '+(d.name||'')} onClick=${e=>e.stopPropagation()}>
-  <header><h2>${d.name||'Preview'}</h2><button className="iconbtn" onClick=${()=>setD(null)} aria-label="Close preview"><${Icon} n="x"/></button></header>
-  <div className="modal-b pv-b">${img?html`<img className="pv-img" src=${d.url} alt=${d.name||'Preview'}/>`:pdf?html`<${PdfPages} key=${d.url} url=${d.url}/>`:d.text!=null?html`<${TextPrev} text=${d.text} csv=${/csv/i.test(d.mime||'')||/\.csv$/i.test(d.name||'')}/>`:html`<p className="muted">There is no preview for this kind of file. Press Download to save it.</p>`}</div>
-  <footer><span className="btnrow"><${Btn} onClick=${()=>setD(null)}>Close</${Btn}><${Btn} kind="primary" icon="download" onClick=${dl}>Download</${Btn}></span></footer></div></div>`;
+  <header><h2>${d.name||'Preview'}${lst&&html` <span className="muted small">(${ix+1} of ${lst.length})</span>`}</h2><button className="iconbtn" onClick=${()=>setD(null)} aria-label="Close preview"><${Icon} n="x"/></button></header>
+  <div className="modal-b pv-b" onTouchStart=${e=>{tch.current=e.touches[0].clientX;}} onTouchEnd=${e=>{if(tch.current==null||!lst)return;const dx=e.changedTouches[0].clientX-tch.current;tch.current=null;if(Math.abs(dx)>60)go(dx<0?1:-1);}}>${lst&&html`<button type="button" className="pv-nav prev" aria-label="Previous image" onClick=${()=>go(-1)}>‹</button><button type="button" className="pv-nav next" aria-label="Next image" onClick=${()=>go(1)}>›</button>`}${img?html`<img className="pv-img" src=${d.url} alt=${d.name||'Preview'}/>`:pdf?html`<${PdfPages} key=${d.url} url=${d.url}/>`:d.text!=null?html`<${TextPrev} text=${d.text} csv=${/csv/i.test(d.mime||'')||/\.csv$/i.test(d.name||'')}/>`:html`<p className="muted">There is no preview for this kind of file. Press Download to save it.</p>`}</div>
+  <footer><span className="btnrow">${lst&&html`<${Btn} onClick=${()=>go(-1)}>Previous</${Btn}><${Btn} onClick=${()=>go(1)}>Next</${Btn}>`}<${Btn} onClick=${()=>setD(null)}>Close</${Btn}><${Btn} kind="primary" icon="download" onClick=${dl}>Download</${Btn}></span></footer></div></div>`;
 };
 /* a link that opens the preview instead of leaving the page */
-const FileLink=({f,children,className,title})=>html`<a className=${className||''} href=${f.url} title=${title||f.name||''} target="_blank" rel="noopener" onClick=${e=>{e.preventDefault();openPreview({url:f.url,name:f.name||(isPdfF(f)?'document.pdf':'image.jpg'),mime:f.mime});}}>${children}</a>`;
+let PVN=0;const PVREG=new Map();
+const FileLink=({f,children,className,title})=>{const id=useRef(null);if(!id.current)id.current='pv'+(++PVN);PVREG.set(id.current,{url:f.url,name:f.name||(isPdfF(f)?'document.pdf':'image.jpg'),mime:f.mime});
+ return html`<a className=${className||''} data-pv=${id.current} href=${f.url} title=${title||f.name||''} target="_blank" rel="noopener" onClick=${e=>{e.preventDefault();const me=PVREG.get(id.current);const box=e.currentTarget.closest('.drawer,.modal,.card,section,main')||document.body;const list=[...box.querySelectorAll('a[data-pv]')].map(a=>PVREG.get(a.getAttribute('data-pv'))).filter(Boolean);const idx=Math.max(0,list.findIndex(x=>x.url===me.url));openPreview({...me,list:list.length>1?list:null,idx});}}>${children}</a>`;};
 
 /* ---- a small PDF writer for tables (no library, works offline) ---- */
 const HW=[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
